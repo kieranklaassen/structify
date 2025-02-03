@@ -3,5 +3,14 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in structify.gemspec
 gemspec
 
-gem "rake", "~> 12.0"
-gem "rspec", "~> 3.0"
+group :development, :test do
+  gem "rake", "~> 13.0"
+  gem "rspec", "~> 3.12"
+  gem "rspec-rails", "~> 6.1"
+  gem "activerecord", "~> 7.1.0"
+  gem "sqlite3", "~> 1.6.0" # For testing with ActiveRecord
+  gem "rubocop", "~> 1.21"
+  gem "rubocop-rspec", "~> 2.25"
+  gem "yard", "~> 0.9"
+  gem "debug", ">= 1.0.0"
+end
