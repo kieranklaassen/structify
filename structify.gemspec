@@ -26,6 +26,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Runtime dependencies
-  spec.add_dependency "activesupport", ">= 7.1"
+  spec.add_dependency "activesupport", "~> 7.1"
   spec.add_dependency "attr_json", "~> 2.1"
 end
