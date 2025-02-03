@@ -99,7 +99,7 @@ class Article < ApplicationRecord
     version 1
 
     assistant_prompt "Extract the following fields from the article content"
-    llm_model "gpt-4"
+    llm_model "gpt-4o"
 
     # All these fields will be stored in the extracted_data JSON column
     field :title, :string, required: true
