@@ -64,11 +64,40 @@ class AddExtractedDataToArticles < ActiveRecord::Migration[7.1]
 end
 ```
 
-For PostgreSQL users, you can also use `jsonb` for better performance:
+#### Database-Specific Column Types
 
-```ruby
-add_column :articles, :extracted_data, :jsonb
-```
+Different databases have different JSON column types:
+
+- **PostgreSQL**
+
+  ```ruby
+  # Use jsonb for better performance (recommended)
+  add_column :articles, :extracted_data, :jsonb
+
+  # Or standard json type
+  add_column :articles, :extracted_data, :json
+  ```
+
+- **MySQL (>= 5.7)**
+
+  ```ruby
+  # MySQL uses json type
+  add_column :articles, :extracted_data, :json
+  ```
+
+- **MariaDB (>= 10.2)**
+
+  ```ruby
+  # MariaDB uses longtext type with JSON check constraint
+  add_column :articles, :extracted_data, :longtext
+
+  # Add a check constraint to ensure JSON validity
+  execute <<-SQL
+    ALTER TABLE articles
+    ADD CONSTRAINT articles_extracted_data_json_check
+    CHECK (JSON_VALID(extracted_data))
+  SQL
+  ```
 
 ### Model Setup
 
