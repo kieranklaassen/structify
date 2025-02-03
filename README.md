@@ -33,11 +33,46 @@ Or install it yourself as:
 $ gem install structify
 ```
 
-## Usage
+## Setup
 
-### Basic Example
+### Database Requirements
 
-Here's a simple example of using Structify in a Rails model:
+⚠️ **Important:** Structify requires a JSON column named `extracted_data` in your model's table. This column stores all the extracted fields defined in your schema.
+
+Create a migration for your model:
+
+```ruby
+class CreateArticles < ActiveRecord::Migration[7.1]
+  def change
+    create_table :articles do |t|
+      t.string :title       # Your regular columns
+      t.text :content      # Your regular columns
+      t.json :extracted_data  # Required by Structify
+      t.timestamps
+    end
+  end
+end
+```
+
+Or add the column to an existing table:
+
+```ruby
+class AddExtractedDataToArticles < ActiveRecord::Migration[7.1]
+  def change
+    add_column :articles, :extracted_data, :json
+  end
+end
+```
+
+For PostgreSQL users, you can also use `jsonb` for better performance:
+
+```ruby
+add_column :articles, :extracted_data, :jsonb
+```
+
+### Model Setup
+
+Include the Structify::Model module in your model and define your schema:
 
 ```ruby
 class Article < ApplicationRecord
@@ -51,11 +86,43 @@ class Article < ApplicationRecord
     assistant_prompt "Extract the following fields from the article content"
     llm_model "gpt-4"
 
+    # All these fields will be stored in the extracted_data JSON column
     field :title, :string, required: true
     field :summary, :text, description: "A brief summary of the article"
     field :category, :string, enum: ["tech", "business", "science"]
   end
 end
+```
+
+## Usage
+
+### Basic Example
+
+Once your model is set up with the required `extracted_data` column, you can use it like this:
+
+```ruby
+# Create a new article with extracted data
+article = Article.create(
+  title: "Original Title",  # Regular column
+  content: "Original content...",  # Regular column
+  # Extracted fields are stored in extracted_data JSON column:
+  title: "Extracted Title",
+  summary: "This is the extracted summary",
+  category: "tech"
+)
+
+# Access extracted fields directly
+article.title      # => "Extracted Title"
+article.summary    # => "This is the extracted summary"
+article.category   # => "tech"
+
+# The data is stored in the extracted_data JSON column
+article.extracted_data
+# => {
+#   "title": "Extracted Title",
+#   "summary": "This is the extracted summary",
+#   "category": "tech"
+# }
 ```
 
 ### Advanced Example
@@ -175,21 +242,6 @@ summary.participants # => [{ name: "Alice", ... }]
 # Validate enum values
 summary.sentiment = "invalid"
 summary.valid?  # => false
-```
-
-## Database Setup
-
-Ensure your model has a JSON column named `extracted_data`:
-
-```ruby
-class CreateEmailSummaries < ActiveRecord::Migration[7.1]
-  def change
-    create_table :email_summaries do |t|
-      t.json :extracted_data  # Required by Structify
-      t.timestamps
-    end
-  end
-end
 ```
 
 ## Development
