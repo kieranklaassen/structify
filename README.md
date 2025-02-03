@@ -85,20 +85,6 @@ Different databases have different JSON column types:
   add_column :articles, :extracted_data, :json
   ```
 
-- **MariaDB (>= 10.2)**
-
-  ```ruby
-  # MariaDB uses longtext type with JSON check constraint
-  add_column :articles, :extracted_data, :longtext
-
-  # Add a check constraint to ensure JSON validity
-  execute <<-SQL
-    ALTER TABLE articles
-    ADD CONSTRAINT articles_extracted_data_json_check
-    CHECK (JSON_VALID(extracted_data))
-  SQL
-  ```
-
 ### Model Setup
 
 Include the Structify::Model module in your model and define your schema:
