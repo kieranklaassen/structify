@@ -33,6 +33,30 @@ module Structify
       # Store all extracted data in the extracted_data JSON column
       attr_json_config(default_container_attribute: :extracted_data)
     end
+    
+    # Instance methods
+    def version_compatible_with?(required_version)
+      record_version = self.extracted_data && self.extracted_data["version"] ? 
+                       self.extracted_data["version"] : 1
+      record_version >= required_version
+    end
+    
+    # Check if a version is within a given range/array of versions
+    # This is used in field accessors to check version compatibility
+    #
+    # @param version [Integer] The version to check
+    # @param range [Range, Array, Integer] The range, array, or single version to check against
+    # @return [Boolean] Whether the version is within the range
+    def version_in_range?(version, range)
+      case range
+      when Range
+        range.cover?(version)
+      when Array
+        range.include?(version)
+      else
+        version == range
+      end
+    end
 
     # Class methods added to the including class
     module ClassMethods
@@ -102,7 +126,13 @@ module Structify
     # @return [void]
     def version(num)
       @version_number = num
-      model.attribute :version, :integer, default: num
+      
+      # Define version as an attr_json field so it's stored in extracted_data
+      model.attr_json :version, :integer, default: num
+      
+      # Store mapping of fields to their introduction version
+      @fields_by_version ||= {}
+      @fields_by_version[num] ||= []
     end
 
 
@@ -118,17 +148,51 @@ module Structify
     # @param min_items [Integer] For array type, minimum number of items
     # @param max_items [Integer] For array type, maximum number of items
     # @param unique_items [Boolean] For array type, whether items must be unique
+    # @param versions [Range, Array, Integer] The versions this field is available in (default: current version onwards)
     # @return [void]
     def field(name, type, required: false, description: nil, enum: nil, 
               items: nil, properties: nil, min_items: nil, max_items: nil, 
-              unique_items: nil)
+              unique_items: nil, versions: nil)
+      
+      # Handle version information
+      version_range = if versions
+                        # Use the versions parameter if provided
+                        versions
+                      else
+                        # Default: field is available from current version onwards
+                        @version_number..999
+                      end
+      
+      # Check if the field is applicable for the current schema version
+      field_available = version_in_range?(@version_number, version_range)
+      
+      # Skip defining the field in the schema if it's not applicable to the current version
+      unless field_available
+        # Still define an accessor that raises an appropriate error
+        define_version_range_accessor(name, version_range)
+        return
+      end
+      
+      # Calculate a simple introduced_in for backward compatibility
+      effective_introduced_in = case version_range
+                               when Range
+                                 version_range.begin
+                               when Array
+                                 version_range.min
+                               else
+                                 version_range
+                               end
+      
       field_definition = {
         name: name,
         type: type,
         required: required,
-        description: description
+        description: description,
+        version_range: version_range,
+        introduced_in: effective_introduced_in
       }
       
+      # Add enum if provided
       field_definition[:enum] = enum if enum
       
       # Array specific properties
@@ -145,6 +209,11 @@ module Structify
       end
       
       fields << field_definition
+      
+      # Track field by its version range
+      @fields_by_version ||= {}
+      @fields_by_version[effective_introduced_in] ||= []
+      @fields_by_version[effective_introduced_in] << name
 
       # Map JSON Schema types to Ruby/AttrJson types
       attr_type = case type
@@ -160,7 +229,164 @@ module Structify
                     type # string, text stay the same
                   end
 
-      model.attr_json name, attr_type
+      # Define custom accessor that checks version compatibility
+      define_version_range_accessors(name, attr_type, version_range)
+    end
+    
+    # Check if a version is within a given range/array of versions
+    #
+    # @param version [Integer] The version to check
+    # @param range [Range, Array, Integer] The range, array, or single version to check against
+    # @return [Boolean] Whether the version is within the range
+    def version_in_range?(version, range)
+      case range
+      when Range
+        range.cover?(version)
+      when Array
+        range.include?(version)
+      else
+        version == range
+      end
+    end
+    
+    # Define accessor methods that check version compatibility using the new version ranges
+    #
+    # @param name [Symbol] The field name
+    # @param type [Symbol] The field type for attr_json
+    # @param version_range [Range, Array, Integer] The versions this field is available in
+    # @return [void]
+    def define_version_range_accessors(name, type, version_range)
+      # Define the attr_json normally first
+      model.attr_json name, type
+      
+      # Extract current version for error messages
+      schema_version = @version_number
+      
+      # Then override the reader method to check versions
+      model.class_eval <<-RUBY, __FILE__, __LINE__ + 1
+        # Store original method
+        alias_method :_original_#{name}, :#{name}
+        
+        # Override reader to check version compatibility
+        def #{name}
+          # Get the version from the record data
+          record_version = self.extracted_data && self.extracted_data["version"] ? 
+                           self.extracted_data["version"] : 1
+          
+          # Check if record version is compatible with field's version range
+          field_version_range = #{version_range.inspect}
+          
+          # Handle field lifecycle based on version
+          unless version_in_range?(record_version, field_version_range)
+            # Check if this is a removed field (was valid in earlier versions but not current version)
+            if field_version_range.is_a?(Range) && field_version_range.begin <= record_version && field_version_range.end < #{schema_version}
+              raise Structify::RemovedFieldError.new(
+                "#{name}", 
+                field_version_range.end
+              )
+            # Check if this is a new field (only valid in later versions)
+            elsif field_version_range.is_a?(Range) && field_version_range.begin > record_version
+              raise Structify::MissingFieldError.new(
+                "#{name}", 
+                record_version,
+                field_version_range.begin
+              )
+            # Otherwise it's just not in the valid range
+            else
+              raise Structify::VersionRangeError.new(
+                "#{name}", 
+                record_version, 
+                field_version_range
+              )
+            end
+          end
+          
+          # Check for deprecated fields and show warning
+          if field_version_range.is_a?(Range) && 
+             field_version_range.begin < #{schema_version} && 
+             field_version_range.end < 999 && 
+             field_version_range.cover?(record_version)
+            ActiveSupport::Deprecation.warn(
+              "Field '#{name}' is deprecated as of version #{schema_version} and will be removed in version \#{field_version_range.end}."
+            )
+          end
+          
+          # Call original method
+          _original_#{name}
+        end
+      RUBY
+    end
+    
+    # Define accessor for fields that are not in the current schema version
+    # These will raise an appropriate error when accessed
+    #
+    # @param name [Symbol] The field name
+    # @param version_range [Range, Array, Integer] The versions this field is available in
+    # @return [void]
+    def define_version_range_accessor(name, version_range)
+      # Capture schema version to use in the eval block
+      schema_version = @version_number
+      
+      # Handle different version range types
+      version_range_type = case version_range
+                          when Range
+                            "range"
+                          when Array
+                            "array"
+                          else
+                            "integer"
+                          end
+                          
+      # Extract begin/end values for ranges
+      range_begin = case version_range
+                    when Range
+                      version_range.begin
+                    when Array
+                      version_range.min
+                    else
+                      version_range
+                    end
+                    
+      range_end = case version_range
+                  when Range
+                    version_range.end
+                  when Array
+                    version_range.max
+                  else
+                    version_range
+                  end
+      
+      model.class_eval <<-RUBY, __FILE__, __LINE__ + 1
+        # Define an accessor that raises an error when accessed
+        def #{name}
+          # Based on the version_range type, create appropriate errors
+          case "#{version_range_type}"
+          when "range"
+            if #{range_begin} <= #{schema_version} && #{range_end} < #{schema_version}
+              # Removed field
+              raise Structify::RemovedFieldError.new("#{name}", #{range_end})
+            elsif #{range_begin} > #{schema_version}
+              # Field from future version
+              raise Structify::MissingFieldError.new("#{name}", #{schema_version}, #{range_begin})
+            else
+              # Not in range for other reasons
+              raise Structify::VersionRangeError.new("#{name}", #{schema_version}, #{version_range.inspect})
+            end
+          when "array"
+            # For arrays, we can only check if the current version is in the array
+            raise Structify::VersionRangeError.new("#{name}", #{schema_version}, #{version_range.inspect})
+          else
+            # For integers, just report version mismatch
+            raise Structify::VersionRangeError.new("#{name}", #{schema_version}, #{version_range.inspect})
+          end
+        end
+        
+        # Define a writer that raises an error too
+        def #{name}=(value)
+          # Use the same error logic as the reader
+          self.#{name}
+        end
+      RUBY
     end
 
     # Generate the JSON schema representation
