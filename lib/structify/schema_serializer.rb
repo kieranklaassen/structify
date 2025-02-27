@@ -20,9 +20,46 @@ module Structify
       fields = schema_builder.fields
       required_fields = fields.select { |f| f[:required] }.map { |f| f[:name].to_s }
       properties_hash = fields.each_with_object({}) do |f, hash|
+        # Start with the basic type
         prop = { type: f[:type].to_s }
+        
+        # Add description if available
         prop[:description] = f[:description] if f[:description]
+        
+        # Add enum if available
         prop[:enum] = f[:enum] if f[:enum]
+        
+        # Handle array specific properties
+        if f[:type] == :array
+          # Add items schema
+          prop[:items] = f[:items] if f[:items]
+          
+          # Add array constraints
+          prop[:minItems] = f[:min_items] if f[:min_items]
+          prop[:maxItems] = f[:max_items] if f[:max_items]
+          prop[:uniqueItems] = f[:unique_items] if f[:unique_items]
+        end
+        
+        # Handle object specific properties
+        if f[:type] == :object && f[:properties]
+          prop[:properties] = {}
+          required_props = []
+          
+          # Process each property
+          f[:properties].each do |prop_name, prop_def|
+            prop[:properties][prop_name] = prop_def.dup
+            
+            # If a property is marked as required, add it to required list and remove from property definition
+            if prop_def[:required]
+              required_props << prop_name
+              prop[:properties][prop_name].delete(:required)
+            end
+          end
+          
+          # Add required array if we have required properties
+          prop[:required] = required_props unless required_props.empty?
+        end
+        
         hash[f[:name].to_s] = prop
       end
 

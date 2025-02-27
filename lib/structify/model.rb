@@ -113,17 +113,54 @@ module Structify
     # @param required [Boolean] Whether the field is required
     # @param description [String] The field description
     # @param enum [Array] Possible values for the field
+    # @param items [Hash] For array type, defines the schema for array items
+    # @param properties [Hash] For object type, defines the properties of the object
+    # @param min_items [Integer] For array type, minimum number of items
+    # @param max_items [Integer] For array type, maximum number of items
+    # @param unique_items [Boolean] For array type, whether items must be unique
     # @return [void]
-    def field(name, type, required: false, description: nil, enum: nil)
-      fields << {
+    def field(name, type, required: false, description: nil, enum: nil, 
+              items: nil, properties: nil, min_items: nil, max_items: nil, 
+              unique_items: nil)
+      field_definition = {
         name: name,
         type: type,
         required: required,
-        description: description,
-        enum: enum
+        description: description
       }
+      
+      field_definition[:enum] = enum if enum
+      
+      # Array specific properties
+      if type == :array
+        field_definition[:items] = items if items
+        field_definition[:min_items] = min_items if min_items
+        field_definition[:max_items] = max_items if max_items
+        field_definition[:unique_items] = unique_items if unique_items
+      end
+      
+      # Object specific properties
+      if type == :object
+        field_definition[:properties] = properties if properties
+      end
+      
+      fields << field_definition
 
-      model.attr_json name, type
+      # Map JSON Schema types to Ruby/AttrJson types
+      attr_type = case type
+                  when :integer, :number
+                    :integer
+                  when :array
+                    :json
+                  when :object
+                    :json
+                  when :boolean
+                    :boolean
+                  else
+                    type # string, text stay the same
+                  end
+
+      model.attr_json name, attr_type
     end
 
     # Generate the JSON schema representation
