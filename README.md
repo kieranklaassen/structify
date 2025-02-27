@@ -241,12 +241,12 @@ schema_definition do
   version 3
   
   # Fields for specific version ranges
-  field :title, :string, versions: 1..999      # Available in all versions
-  field :legacy, :string, versions: 1...3      # Only in versions 1-2 (removed in v3)
-  field :summary, :text, versions: 2..999      # Added in version 2
-  field :temp_field, :string, versions: 2..3   # Only in versions 2-3
+  field :title, :string                       # Available in all versions (default behavior)
+  field :legacy, :string, versions: 1...3     # Only in versions 1-2 (removed in v3)
+  field :summary, :text, versions: 2          # Added in version 2 onwards
+  field :content, :text, versions: 2..        # Added in version 2 onwards (endless range)
+  field :temp_field, :string, versions: 2..3  # Only in versions 2-3
   field :special, :string, versions: [1, 3, 5] # Only in versions 1, 3, and 5
-  field :latest, :string                       # Default: available in all versions
 end
 ```
 
@@ -256,11 +256,12 @@ Structify supports several ways to specify which versions a field is available i
 
 | Syntax | Example | Meaning |
 |--------|---------|---------|
+| No version specified | `field :title, :string` | Available in all versions (default) |
+| Single integer | `versions: 2` | Available from version 2 onwards |
 | Range (inclusive) | `versions: 1..3` | Available in versions 1, 2, and 3 |
 | Range (exclusive) | `versions: 1...3` | Available in versions 1 and 2 (not 3) |
-| Open-ended range | `versions: 2..999` | Available from version 2 onwards |
+| Endless range | `versions: 2..` | Available from version 2 onwards |
 | Array | `versions: [1, 4, 7]` | Only available in versions 1, 4, and 7 |
-| Default (none) | `field :name, :string` | Available in all versions |
 
 ### Handling Records with Different Versions
 

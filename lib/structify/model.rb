@@ -241,11 +241,17 @@ module Structify
     def version_in_range?(version, range)
       case range
       when Range
-        range.cover?(version)
+        # Handle endless ranges (Ruby 2.6+): 2.. means 2 and above
+        if range.end.nil?
+          version >= range.begin
+        else
+          range.cover?(version)
+        end
       when Array
         range.include?(version)
       else
-        version == range
+        # A single integer means "this version and onwards"
+        version >= range
       end
     end
     
@@ -285,11 +291,12 @@ module Structify
                 field_version_range.end
               )
             # Check if this is a new field (only valid in later versions)
-            elsif field_version_range.is_a?(Range) && field_version_range.begin > record_version
-              raise Structify::MissingFieldError.new(
+            elsif (field_version_range.is_a?(Range) && field_version_range.begin > record_version) ||
+                  (field_version_range.is_a?(Integer) && field_version_range > record_version)
+              raise Structify::VersionRangeError.new(
                 "#{name}", 
                 record_version,
-                field_version_range.begin
+                field_version_range
               )
             # Otherwise it's just not in the valid range
             else
@@ -367,7 +374,7 @@ module Structify
               raise Structify::RemovedFieldError.new("#{name}", #{range_end})
             elsif #{range_begin} > #{schema_version}
               # Field from future version
-              raise Structify::MissingFieldError.new("#{name}", #{schema_version}, #{range_begin})
+              raise Structify::VersionRangeError.new("#{name}", #{schema_version}, #{version_range.inspect})
             else
               # Not in range for other reasons
               raise Structify::VersionRangeError.new("#{name}", #{schema_version}, #{version_range.inspect})

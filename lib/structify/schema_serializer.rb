@@ -120,11 +120,17 @@ module Structify
     def version_in_range?(version, range)
       case range
       when Range
-        range.cover?(version)
+        # Handle endless ranges (Ruby 2.6+): 2.. means 2 and above
+        if range.end.nil?
+          version >= range.begin
+        else
+          range.cover?(version)
+        end
       when Array
         range.include?(version)
       else
-        version == range
+        # A single integer means "this version and onwards"
+        version >= range
       end
     end
     
@@ -142,7 +148,7 @@ module Structify
       elsif versions.is_a?(Array)
         versions.join(", ")
       else
-        versions.to_s
+        "#{versions} and above"  # Single integer means this version and onwards
       end
     end
   end

@@ -326,6 +326,37 @@ RSpec.describe Structify::Model do
         expect(schema[:parameters][:properties]["flag"][:enum]).to eq([true, false])
       end
     end
+    
+    context "with required fields" do
+      it "properly sets required fields in the JSON schema" do
+        model_class.schema_definition do
+          field :title, :string, required: true
+          field :description, :text
+          field :status, :string, required: true
+          field :tags, :array, items: { type: "string" }
+        end
+        
+        schema = model_class.json_schema
+        expect(schema[:parameters][:required]).to include("title", "status")
+        expect(schema[:parameters][:required]).not_to include("description", "tags")
+        expect(schema[:parameters][:required].length).to eq(2)
+      end
+      
+      it "supports mix of required and optional fields" do
+        model_class.schema_definition do
+          field :required_string, :string, required: true
+          field :optional_string, :string
+          field :required_number, :number, required: true
+          field :optional_number, :number
+          field :required_array, :array, items: { type: "string" }, required: true
+          field :optional_array, :array, items: { type: "string" }
+        end
+        
+        schema = model_class.json_schema
+        expect(schema[:parameters][:required]).to contain_exactly("required_string", "required_number", "required_array")
+        expect(schema[:parameters][:required]).not_to include("optional_string", "optional_number", "optional_array")
+      end
+    end
   end
 
   describe "versioning" do
@@ -452,8 +483,8 @@ RSpec.describe Structify::Model do
         expect(article_v2.category).to eq("tech")
         
         # Check the specific error raised when accessing fields from a newer version
-        expect { article_v2.summary }.to raise_error(Structify::MissingFieldError)
-        expect { article_v2.tags }.to raise_error(Structify::MissingFieldError)
+        expect { article_v2.summary }.to raise_error(Structify::VersionRangeError)
+        expect { article_v2.tags }.to raise_error(Structify::VersionRangeError)
         
         # But we can check compatibility without raising errors
         expect(article_v2.version_compatible_with?(1)).to be_truthy
@@ -494,8 +525,8 @@ RSpec.describe Structify::Model do
         
         article_v2 = article_v2_class.find(article_v1.id)
         
-        # This should raise a MissingFieldError about version mismatch
-        expect { article_v2.summary }.to raise_error(Structify::MissingFieldError)
+        # This should raise a VersionRangeError about version mismatch
+        expect { article_v2.summary }.to raise_error(Structify::VersionRangeError)
       end
       
       it "can access fields marked as deprecated" do
@@ -583,6 +614,86 @@ RSpec.describe Structify::Model do
           # Should understand versions correctly
           expect(reloaded.version_compatible_with?(4)).to be_truthy  # Current version
           expect(reloaded.extracted_data["version"]).to eq(4)  # The record has version 4
+        end
+        
+        it "supports version 2 to mean version 2 onwards" do
+          endless_range_class = Class.new(ActiveRecord::Base) do
+            self.table_name = "articles"
+            include Structify::Model
+            
+            schema_definition do
+              version 3
+              
+              # Test integer version to mean "this version onwards"
+              field :from_v1, :string
+              field :from_v2, :string, versions: 2  # From version 2 onwards using just the integer
+              field :only_v3, :integer, versions: 3
+            end
+          end
+          
+          schema = endless_range_class.json_schema
+          expect(schema[:parameters][:properties].keys).to include("from_v1", "from_v2", "only_v3")
+          
+          # Create v1 record and verify access with v3 schema
+          v1_record = endless_range_class.new
+          v1_record.extracted_data = { "version" => 1, "from_v1" => "V1 data" }
+          v1_record.save!
+          
+          reloaded = endless_range_class.find(v1_record.id)
+          expect(reloaded.from_v1).to eq("V1 data")
+          expect { reloaded.from_v2 }.to raise_error(Structify::VersionRangeError)
+          expect { reloaded.only_v3 }.to raise_error(Structify::VersionRangeError)
+          
+          # Create v2 record and verify access
+          v2_record = endless_range_class.new
+          v2_record.extracted_data = { 
+            "version" => 2, 
+            "from_v1" => "V1 field", 
+            "from_v2" => "V2 field" 
+          }
+          v2_record.save!
+          
+          reloaded = endless_range_class.find(v2_record.id)
+          expect(reloaded.from_v1).to eq("V1 field")
+          expect(reloaded.from_v2).to eq("V2 field")
+          expect { reloaded.only_v3 }.to raise_error(Structify::VersionRangeError)
+        end
+        
+        it "properly generates error messages for version ranges" do
+          v3_class = Class.new(ActiveRecord::Base) do
+            self.table_name = "articles"
+            include Structify::Model
+            
+            schema_definition do
+              version 3
+              field :v1_field, :string, versions: 1
+              field :v2_field, :string, versions: 2
+              field :v3_field, :string, versions: 3
+              field :v1_to_v2, :string, versions: 1..2
+              field :v2_and_up, :string, versions: 2..999
+            end
+          end
+          
+          v1_record = v3_class.new
+          v1_record.extracted_data = { "version" => 1, "v1_field" => "V1 data" }
+          v1_record.save!
+          
+          reloaded = v3_class.find(v1_record.id)
+          
+          # Test error messages for different version range types
+          begin
+            reloaded.v3_field
+          rescue Structify::VersionRangeError => e
+            expect(e.message).to include("Field 'v3_field' is not available in version 1")
+            expect(e.message).to include("only available in versions")
+          end
+          
+          begin
+            reloaded.v2_and_up
+          rescue Structify::VersionRangeError => e
+            expect(e.message).to include("Field 'v2_and_up' is not available in version 1")
+            expect(e.message).to include("only available in versions: 2 to 999")
+          end
         end
         
         it "raises errors for fields outside their version range" do

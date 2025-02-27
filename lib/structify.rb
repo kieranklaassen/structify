@@ -85,7 +85,7 @@ module Structify
       elsif versions.is_a?(Array)
         versions.join(", ")
       else
-        versions.to_s
+        "#{versions} and above"  # Single integer means this version and onwards
       end
     end
   end
