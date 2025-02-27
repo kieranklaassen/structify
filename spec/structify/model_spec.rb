@@ -382,8 +382,8 @@ RSpec.describe Structify::Model do
             field :status, :string, versions: 1..999  # Status field (will be deprecated)
             
             # New fields in version 2
-            field :summary, :text
-            field :tags, :array, items: { type: "string" }
+            field :summary, :text, versions: 2..999
+            field :tags, :array, items: { type: "string" }, versions: 2..999
           end
         end
       end

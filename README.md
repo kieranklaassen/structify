@@ -246,7 +246,7 @@ schema_definition do
   field :summary, :text, versions: 2..999      # Added in version 2
   field :temp_field, :string, versions: 2..3   # Only in versions 2-3
   field :special, :string, versions: [1, 3, 5] # Only in versions 1, 3, and 5
-  field :latest, :string                       # Default: current version onwards
+  field :latest, :string                       # Default: available in all versions
 end
 ```
 
@@ -260,7 +260,7 @@ Structify supports several ways to specify which versions a field is available i
 | Range (exclusive) | `versions: 1...3` | Available in versions 1 and 2 (not 3) |
 | Open-ended range | `versions: 2..999` | Available from version 2 onwards |
 | Array | `versions: [1, 4, 7]` | Only available in versions 1, 4, and 7 |
-| Default (none) | `field :name, :string` | Available only from current schema version onwards |
+| Default (none) | `field :name, :string` | Available in all versions |
 
 ### Handling Records with Different Versions
 

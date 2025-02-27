@@ -159,8 +159,8 @@ module Structify
                         # Use the versions parameter if provided
                         versions
                       else
-                        # Default: field is available from current version onwards
-                        @version_number..999
+                        # Default: field is available in all versions
+                        1..999
                       end
       
       # Check if the field is applicable for the current schema version
