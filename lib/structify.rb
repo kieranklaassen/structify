@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "structify/version"
+require_relative "structify/schema_serializer"
 require_relative "structify/model"
 
 # Structify is a DSL for defining extraction schemas for LLM-powered models.
@@ -25,5 +26,4 @@ require_relative "structify/model"
 #   end
 module Structify
   class Error < StandardError; end
-  # Your code goes here...
 end

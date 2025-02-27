@@ -3,6 +3,7 @@
 require "active_support/concern"
 require "active_support/core_ext/class/attribute"
 require "attr_json"
+require_relative "schema_serializer"
 
 module Structify
   # The Model module provides a DSL for defining LLM extraction schemas in your Rails models.
@@ -164,23 +165,8 @@ module Structify
     #
     # @return [Hash] The JSON schema
     def to_json_schema
-      required_fields = fields.select { |f| f[:required] }.map { |f| f[:name].to_s }
-      properties_hash = fields.each_with_object({}) do |f, hash|
-        prop = { type: f[:type].to_s }
-        prop[:description] = f[:description] if f[:description]
-        prop[:enum] = f[:enum] if f[:enum]
-        hash[f[:name].to_s] = prop
-      end
-
-      {
-        name: title_str,
-        description: description_str,
-        parameters: {
-          type: "object",
-          required: required_fields,
-          properties: properties_hash
-        }
-      }
+      serializer = SchemaSerializer.new(self)
+      serializer.to_json_schema
     end
   end
 end
