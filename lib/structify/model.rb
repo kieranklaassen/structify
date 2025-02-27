@@ -7,7 +7,7 @@ require_relative "schema_serializer"
 
 module Structify
   # The Model module provides a DSL for defining LLM extraction schemas in your Rails models.
-  # It allows you to define fields, versioning, and assistant prompts for LLM-based data extraction.
+  # It allows you to define fields, versioning, and validation for LLM-based data extraction.
   #
   # @example
   #   class Article < ApplicationRecord
@@ -17,8 +17,6 @@ module Structify
   #       title "Article Extraction"
   #       description "Extract article metadata"
   #       version 1
-  #       assistant_prompt "Extract the following fields from the article"
-  #       llm_model "gpt-4"
   #
   #       field :title, :string, required: true
   #       field :summary, :text, description: "A brief summary of the article"
@@ -61,19 +59,6 @@ module Structify
         schema_builder&.version_number
       end
 
-      # Get the assistant prompt
-      #
-      # @return [String] The assistant prompt
-      def extraction_assistant_prompt
-        schema_builder&.assistant_prompt_str
-      end
-
-      # Get the LLM model name
-      #
-      # @return [String] The model name
-      def extraction_llm_model
-        schema_builder&.model_name
-      end
     end
   end
 
@@ -83,11 +68,8 @@ module Structify
     # @return [Array<Hash>] The field definitions
     # @return [String] The schema title
     # @return [String] The schema description
-    # @return [String] The assistant prompt
-    # @return [String] The LLM model name
     # @return [Integer] The schema version
-    attr_reader :model, :fields, :title_str, :description_str,
-                :assistant_prompt_str, :model_name, :version_number
+    attr_reader :model, :fields, :title_str, :description_str, :version_number
 
     # Initialize a new SchemaBuilder
     #
@@ -95,8 +77,6 @@ module Structify
     def initialize(model)
       @model = model
       @fields = []
-      @assistant_prompt_str = nil
-      @model_name = nil
       @version_number = 1
     end
 
@@ -125,21 +105,6 @@ module Structify
       model.attribute :version, :integer, default: num
     end
 
-    # Set the assistant prompt
-    #
-    # @param prompt [String] The prompt text
-    # @return [void]
-    def assistant_prompt(prompt)
-      @assistant_prompt_str = prompt.strip
-    end
-
-    # Set the LLM model name
-    #
-    # @param name [String] The model name
-    # @return [void]
-    def llm_model(name)
-      @model_name = name
-    end
 
     # Define a field in the schema
     #

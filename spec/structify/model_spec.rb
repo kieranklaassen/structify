@@ -29,8 +29,6 @@ RSpec.describe Structify::Model do
         title "Article Extraction"
         description "Extract article metadata"
         version 2
-        assistant_prompt "Please extract the following fields from the article"
-        llm_model "gpt-4"
 
         field :title, :string, required: true
         field :summary, :text, description: "A brief summary"
@@ -39,8 +37,6 @@ RSpec.describe Structify::Model do
 
       expect(model_class.schema_builder).to be_a(Structify::SchemaBuilder)
       expect(model_class.extraction_version).to eq(2)
-      expect(model_class.extraction_assistant_prompt).to eq("Please extract the following fields from the article")
-      expect(model_class.extraction_llm_model).to eq("gpt-4")
     end
   end
 

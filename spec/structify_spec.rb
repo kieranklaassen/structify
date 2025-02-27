@@ -16,8 +16,6 @@ RSpec.describe Structify do
         title "Test Schema"
         description "A test schema"
         version 1
-        assistant_prompt "Test prompt"
-        llm_model "gpt-4"
 
         field :title, :string, required: true
       end
