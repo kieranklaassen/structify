@@ -41,5 +41,33 @@ RSpec.describe Structify::SchemaSerializer do
       schema = serializer.to_json_schema
       expect(schema[:parameters][:properties]["simple_field"]).to eq(type: "string")
     end
+    
+    it "includes chain_of_thought field as the first property when thinking mode is enabled" do
+      builder = Structify::SchemaBuilder.new(model_class)
+      # We need to set the thinking mode flag on the builder
+      # This will be implemented in the SchemaBuilder class
+      builder.instance_variable_set(:@thinking_enabled, true)
+      serializer = described_class.new(builder)
+
+      schema = serializer.to_json_schema
+      
+      # Check that chain_of_thought exists with correct properties
+      expect(schema[:parameters][:properties]["chain_of_thought"]).to include(
+        type: "string",
+        description: "Explain your thought process step by step before determining the final values."
+      )
+      
+      # Check that chain_of_thought is the first property
+      expect(schema[:parameters][:properties].keys.first).to eq("chain_of_thought")
+    end
+
+    it "does not include chain_of_thought field when thinking mode is not enabled" do
+      builder = Structify::SchemaBuilder.new(model_class)
+      # Default value should be false
+      serializer = described_class.new(builder)
+
+      schema = serializer.to_json_schema
+      expect(schema[:parameters][:properties]).not_to have_key("chain_of_thought")
+    end
   end
 end

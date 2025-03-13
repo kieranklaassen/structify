@@ -93,7 +93,8 @@ module Structify
     # @return [String] The schema title
     # @return [String] The schema description
     # @return [Integer] The schema version
-    attr_reader :model, :fields, :title_str, :description_str, :version_number
+    # @return [Boolean] Whether thinking mode is enabled
+    attr_reader :model, :fields, :title_str, :description_str, :version_number, :thinking_enabled
 
     # Initialize a new SchemaBuilder
     #
@@ -102,6 +103,16 @@ module Structify
       @model = model
       @fields = []
       @version_number = 1
+      @thinking_enabled = false
+    end
+    
+    # Enable or disable thinking mode
+    # When enabled, the LLM will be asked to provide chain of thought reasoning
+    #
+    # @param enabled [Boolean] Whether to enable thinking mode
+    # @return [void]
+    def thinking(enabled)
+      @thinking_enabled = enabled
     end
 
     # Set the schema title

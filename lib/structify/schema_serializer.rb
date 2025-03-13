@@ -36,7 +36,17 @@ module Structify
       # Get required fields (excluding fields not in the current version)
       required_fields = fields.select { |f| f[:required] }.map { |f| f[:name].to_s }
       
-      properties_hash = fields.each_with_object({}) do |f, hash|
+      # Start with chain_of_thought if thinking mode is enabled
+      properties_hash = {}
+      if schema_builder.thinking_enabled
+        properties_hash["chain_of_thought"] = {
+          type: "string",
+          description: "Explain your thought process step by step before determining the final values."
+        }
+      end
+      
+      # Add all other fields
+      fields.each_with_object(properties_hash) do |f, hash|
         # Start with the basic type
         prop = { type: f[:type].to_s }
         

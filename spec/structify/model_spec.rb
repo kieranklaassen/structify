@@ -61,6 +61,42 @@ RSpec.describe Structify::Model do
       expect(schema[:parameters][:properties]["title"]).to eq(type: "string")
       expect(schema[:parameters][:properties]["category"][:enum]).to eq(["tech", "business"])
     end
+    
+    context "with thinking mode enabled" do
+      let(:thinking_model_class) do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = "articles"
+          include Structify::Model
+          
+          schema_definition do
+            title "Article Extraction with Thinking"
+            description "Extract article metadata with chain of thought"
+            thinking true
+            field :title, :string, required: true
+            field :summary, :text, description: "A brief summary"
+            field :category, :string, enum: ["tech", "business"]
+          end
+        end
+      end
+      
+      it "adds chain_of_thought field as the first property" do
+        schema = thinking_model_class.json_schema
+        
+        # Check that chain_of_thought is the first property
+        expect(schema[:parameters][:properties].keys.first).to eq("chain_of_thought")
+        
+        # Check that chain_of_thought has the correct type and description
+        expect(schema[:parameters][:properties]["chain_of_thought"]).to include(
+          type: "string",
+          description: "Explain your thought process step by step before determining the final values."
+        )
+        
+        # Check that other fields are still present
+        expect(schema[:parameters][:properties]).to have_key("title")
+        expect(schema[:parameters][:properties]).to have_key("summary")
+        expect(schema[:parameters][:properties]).to have_key("category")
+      end
+    end
   end
   
   describe "different data types and field options" do

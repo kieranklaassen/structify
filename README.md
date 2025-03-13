@@ -232,6 +232,42 @@ field :author, :object, properties: {
 }
 ```
 
+## Chain of Thought Mode
+
+Structify supports a "thinking" mode that automatically requests chain of thought reasoning from the LLM:
+
+```ruby
+schema_definition do
+  version 1
+  thinking true  # Enable chain of thought reasoning
+  
+  field :title, :string, required: true
+  # other fields...
+end
+```
+
+Chain of thought (COT) reasoning is beneficial because it:
+- Adds more context to the extraction process
+- Helps the LLM think through problems more systematically
+- Improves accuracy for complex extractions
+- Makes the reasoning process transparent and explainable
+- Reduces hallucinations by forcing step-by-step thinking
+
+This is especially useful when:
+- Answers need more detailed information
+- Questions require multi-step reasoning
+- Extractions involve complex decision-making
+- You need to understand how the LLM reached its conclusions
+
+For best results, include instructions for COT in your base system prompt:
+
+```ruby
+system_prompt = "Extract structured data from the content. 
+For each field, think step by step before determining the value."
+```
+
+You can generate effective chain of thought prompts using tools like the [Claude Prompt Designer](https://console.anthropic.com/dashboard).
+
 ## Schema Versioning and Field Lifecycle
 
 Structify provides a simple field lifecycle management system using a `versions` parameter:
@@ -300,6 +336,7 @@ Structify is designed as a **bridge** between your Rails models and LLM extracti
 - ✅ **Store and validate** extracted data against your schema
 - ✅ **Provide typed access** to extracted fields through your models
 - ✅ **Handle schema versioning** and backward compatibility
+- ✅ **Support chain of thought reasoning** with the thinking mode option
 
 ### What You Need To Implement
 
