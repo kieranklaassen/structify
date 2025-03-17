@@ -37,10 +37,16 @@ module Structify
     # Instance methods
     def version_compatible_with?(required_version)
       container_attribute = self.class.attr_json_config.default_container_attribute
-      record_data = self.send(container_attribute)
-      record_version = record_data && record_data["version"] ? 
-                       record_data["version"] : 1
+      record_data = self.send(container_attribute) || {}
+      record_version = record_data["version"] || 1
       record_version >= required_version
+    end
+    
+    # Get the stored version of this record
+    def stored_version
+      container_attribute = self.class.attr_json_config.default_container_attribute
+      record_data = self.send(container_attribute) || {}
+      record_data["version"] || 1
     end
     
     # Check if a version is within a given range/array of versions
