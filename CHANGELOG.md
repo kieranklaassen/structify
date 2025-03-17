@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2025-03-17
+
+### Added
+
+- Added `saved_change_to_extracted_data?` method that works with the configured `default_container_attribute`
+
 ## [0.3.0] - 2025-03-17
 
 ### Added

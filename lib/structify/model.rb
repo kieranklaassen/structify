@@ -49,6 +49,19 @@ module Structify
       record_data["version"] || 1
     end
     
+    # Check if the extracted data has been changed since the record was last saved
+    # Respects the default_container_attribute configuration
+    #
+    # This provides a consistent method to check for changes regardless of the
+    # container attribute name that was configured.
+    #
+    # @return [Boolean] Whether the extracted data has changed
+    def saved_change_to_extracted_data?
+      container_attribute = self.class.attr_json_config.default_container_attribute
+      respond_to?("saved_change_to_#{container_attribute}?") && 
+        self.send("saved_change_to_#{container_attribute}?")
+    end
+    
     # Check if a version is within a given range/array of versions
     # This is used in field accessors to check version compatibility
     #

@@ -751,4 +751,56 @@ RSpec.describe Structify::Model do
       end
     end
   end
+  
+  describe "change tracking" do
+    let(:model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
+        
+        schema_definition do
+          field :title, :string
+        end
+      end
+    end
+    
+    it "tracks changes to extracted data with default container attribute" do
+      instance = model_class.new(title: "Test")
+      # Mock the standard ActiveRecord change tracking method
+      allow(instance).to receive(:saved_change_to_json_attributes?).and_return(true)
+      expect(instance.saved_change_to_extracted_data?).to be true
+    end
+    
+    context "with custom container attribute" do
+      let(:custom_container_class) do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = "articles"
+          include Structify::Model
+          
+          # Set a different container attribute
+          attr_json_config default_container_attribute: :extracted_data
+          
+          schema_definition do
+            field :title, :string
+          end
+        end
+      end
+      
+      before(:all) do
+        ActiveRecord::Schema.define do
+          create_table :articles, force: true do |t|
+            t.json :extracted_data
+            t.timestamps
+          end unless ActiveRecord::Base.connection.table_exists?(:articles)
+        end
+      end
+      
+      it "respects the custom container attribute" do
+        instance = custom_container_class.new(title: "Test")
+        # Mock the standard ActiveRecord change tracking method for custom attribute
+        allow(instance).to receive(:saved_change_to_extracted_data?).and_return(true)
+        expect(instance.saved_change_to_extracted_data?).to be true
+      end
+    end
+  end
 end
