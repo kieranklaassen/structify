@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added configuration system with `Structify.configure` method
+- Added ability to configure default container attribute through initializer
+- Changed default container attribute from `:extracted_data` to `:json_attributes`
+
 ## [0.2.0] - 2025-03-12
 
 ### Added

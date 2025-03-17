@@ -23,6 +23,29 @@ require_relative "structify/model"
 #     end
 #   end
 module Structify
+  # Configuration class for Structify
+  class Configuration
+    # @return [Symbol] The default container attribute for JSON fields
+    attr_accessor :default_container_attribute
+    
+    def initialize
+      @default_container_attribute = :json_attributes
+    end
+  end
+  
+  # @return [Structify::Configuration] The current configuration
+  def self.configuration
+    @configuration ||= Configuration.new
+  end
+  
+  # Configure Structify
+  # @yield [config] The configuration block
+  # @yieldparam config [Structify::Configuration] The configuration object
+  # @return [Structify::Configuration] The updated configuration
+  def self.configure
+    yield(configuration) if block_given?
+    configuration
+  end
   # Base error class for Structify
   class Error < StandardError; end
   

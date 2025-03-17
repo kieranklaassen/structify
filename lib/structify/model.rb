@@ -30,14 +30,16 @@ module Structify
       include AttrJson::Record
       class_attribute :schema_builder, instance_writer: false, default: nil
 
-      # Store all extracted data in the extracted_data JSON column
-      attr_json_config(default_container_attribute: :extracted_data)
+      # Use the configured default container attribute
+      attr_json_config(default_container_attribute: Structify.configuration.default_container_attribute)
     end
     
     # Instance methods
     def version_compatible_with?(required_version)
-      record_version = self.extracted_data && self.extracted_data["version"] ? 
-                       self.extracted_data["version"] : 1
+      container_attribute = self.class.attr_json_config.default_container_attribute
+      record_data = self.send(container_attribute)
+      record_version = record_data && record_data["version"] ? 
+                       record_data["version"] : 1
       record_version >= required_version
     end
     
@@ -286,9 +288,13 @@ module Structify
         
         # Override reader to check version compatibility
         def #{name}
+          # Get the container attribute and data
+          container_attribute = self.class.attr_json_config.default_container_attribute
+          record_data = self.send(container_attribute)
+          
           # Get the version from the record data
-          record_version = self.extracted_data && self.extracted_data["version"] ? 
-                           self.extracted_data["version"] : 1
+          record_version = record_data && record_data["version"] ? 
+                           record_data["version"] : 1
           
           # Check if record version is compatible with field's version range
           field_version_range = #{version_range.inspect}

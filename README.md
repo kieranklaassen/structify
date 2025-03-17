@@ -64,9 +64,24 @@ bundle install
 Add a JSON column to store extracted data:
 
 ```ruby
-add_column :articles, :extracted_data, :jsonb  # PostgreSQL
+add_column :articles, :json_attributes, :jsonb  # PostgreSQL (default column name)
 # or
-add_column :articles, :extracted_data, :json   # MySQL
+add_column :articles, :json_attributes, :json   # MySQL (default column name)
+
+# Or if you configure a custom column name:
+add_column :articles, :custom_json_column, :jsonb  # PostgreSQL
+```
+
+## Configuration
+
+Structify can be configured in an initializer:
+
+```ruby
+# config/initializers/structify.rb
+Structify.configure do |config|
+  # Configure the default JSON container attribute (default: :json_attributes)
+  config.default_container_attribute = :custom_json_column
+end
 ```
 
 ## Usage
@@ -192,8 +207,8 @@ article.title        # => "How AI is Changing Healthcare"
 article.category     # => "tech"
 article.topics       # => ["machine learning", "healthcare"]
 
-# All data is in the JSON column
-article.extracted_data  # => The complete JSON
+# All data is in the JSON column (default column name: json_attributes)
+article.json_attributes  # => The complete JSON
 ```
 
 ## Field Types
@@ -322,6 +337,18 @@ article_v3.version_compatible_with?(1)  # => true
 # Upgrade record to version 3
 article_v3.summary = "Added in v3"
 article_v3.save!  # Record version is automatically updated to 3
+```
+
+### Accessing the Container Attribute
+
+The JSON container attribute can be accessed directly:
+
+```ruby
+# Using the default container attribute :json_attributes
+article.json_attributes  # => { "title" => "My Title", "version" => 1, ... }
+
+# If you've configured a custom container attribute
+article.custom_json_column  # => { "title" => "My Title", "version" => 1, ... }
 ```
 
 
