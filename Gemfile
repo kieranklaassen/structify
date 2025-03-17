@@ -8,7 +8,7 @@ group :development, :test do
   gem "rspec", "~> 3.12"
   gem "rspec-rails", "~> 6.1"
   gem "activerecord", "~> 8"
-  gem "sqlite3", "~> 1.6.0" # For testing with ActiveRecord
+  gem 'sqlite3', '~> 2.0', '>= 2.0.2'
   gem "rubocop", "~> 1.21"
   gem "rubocop-rspec", "~> 2.25"
   gem "yard", "~> 0.9"

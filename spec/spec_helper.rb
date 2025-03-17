@@ -35,7 +35,7 @@ ActiveRecord::Schema.define do
   create_table :articles, force: true do |t|
     t.string :title
     t.text :content
-    t.json :extracted_data
+    t.json :json_attributes
     t.timestamps
   end
 end
