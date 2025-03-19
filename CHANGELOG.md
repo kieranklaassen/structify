@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3] - 2025-03-19
+
+### Fixed
+
+- Fixed versioning in JSON schema generation to only include fields for the current schema version
+- Fields with `versions: x` no longer appear in other schema versions when generating the JSON schema
+
 ## [0.3.2] - 2025-03-17
 
 ### Added

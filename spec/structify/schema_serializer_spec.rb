@@ -69,5 +69,33 @@ RSpec.describe Structify::SchemaSerializer do
       schema = serializer.to_json_schema
       expect(schema[:parameters][:properties]).not_to have_key("chain_of_thought")
     end
+    
+    it "only includes fields for the current schema version" do
+      builder = Structify::SchemaBuilder.new(model_class)
+      builder.version(2) # Set current version to 2
+      
+      # v1 fields
+      builder.field(:v1_field1, :string, versions: 1)
+      builder.field(:v1_field2, :string, versions: 1)
+      
+      # v2 fields
+      builder.field(:v2_field1, :string, versions: 2)
+      builder.field(:v2_field2, :string, versions: 2)
+      
+      # Common field for both versions
+      builder.field(:common_field, :string)
+      
+      serializer = described_class.new(builder)
+      schema = serializer.to_json_schema
+      
+      # Should include v2 fields and common fields
+      expect(schema[:parameters][:properties]).to have_key("v2_field1")
+      expect(schema[:parameters][:properties]).to have_key("v2_field2")
+      expect(schema[:parameters][:properties]).to have_key("common_field")
+      
+      # Should NOT include v1 fields
+      expect(schema[:parameters][:properties]).not_to have_key("v1_field1")
+      expect(schema[:parameters][:properties]).not_to have_key("v1_field2")
+    end
   end
 end
