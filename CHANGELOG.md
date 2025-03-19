@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4] - 2025-03-19
+
+### Changed
+
+- Renamed schema `title` to `name` to align with JSON Schema standards
+- Added validation for schema name to ensure it matches the pattern `^[a-zA-Z0-9_-]+$`
+
 ## [0.3.3] - 2025-03-19
 
 ### Fixed

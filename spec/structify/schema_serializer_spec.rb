@@ -12,7 +12,7 @@ RSpec.describe Structify::SchemaSerializer do
 
   let(:schema_builder) do
     builder = Structify::SchemaBuilder.new(model_class)
-    builder.title("Test Schema")
+    builder.name("TestSchema")
     builder.description("Test Description")
     builder.field(:title, :string, required: true, description: "The title")
     builder.field(:category, :string, enum: ["tech", "business"])
@@ -25,7 +25,7 @@ RSpec.describe Structify::SchemaSerializer do
     it "generates a valid JSON schema" do
       schema = serializer.to_json_schema
 
-      expect(schema[:name]).to eq("Test Schema")
+      expect(schema[:name]).to eq("TestSchema")
       expect(schema[:description]).to eq("Test Description")
       expect(schema[:parameters]).to be_a(Hash)
       expect(schema[:parameters][:required]).to eq(["title"])

@@ -131,7 +131,7 @@ module Structify
       end
 
       {
-        name: schema_builder.title_str,
+        name: schema_builder.name_str,
         description: schema_builder.description_str,
         parameters: {
           type: "object",

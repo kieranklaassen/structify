@@ -111,11 +111,11 @@ module Structify
   class SchemaBuilder
     # @return [Class] The model class
     # @return [Array<Hash>] The field definitions
-    # @return [String] The schema title
+    # @return [String] The schema name
     # @return [String] The schema description
     # @return [Integer] The schema version
     # @return [Boolean] Whether thinking mode is enabled
-    attr_reader :model, :fields, :title_str, :description_str, :version_number, :thinking_enabled
+    attr_reader :model, :fields, :name_str, :description_str, :version_number, :thinking_enabled
 
     # Initialize a new SchemaBuilder
     #
@@ -136,12 +136,16 @@ module Structify
       @thinking_enabled = enabled
     end
 
-    # Set the schema title
+    # Set the schema name
     #
-    # @param name [String] The title
+    # @param value [String] The name
     # @return [void]
-    def title(name)
-      @title_str = name
+    def name(value)
+      # Validate the name pattern (must match ^[a-zA-Z0-9_-]+$)
+      unless value =~ /^[a-zA-Z0-9_-]+$/
+        raise ArgumentError, "Schema name must only contain alphanumeric characters, underscores, and hyphens"
+      end
+      @name_str = value
     end
 
     # Set the schema description

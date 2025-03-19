@@ -94,7 +94,7 @@ class Article < ApplicationRecord
 
   schema_definition do
     version 1
-    title "Article Extraction"
+    name "ArticleExtraction"
     
     field :title, :string, required: true
     field :summary, :text

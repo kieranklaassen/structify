@@ -13,7 +13,7 @@ RSpec.describe Structify do
       include Structify::Model
 
       schema_definition do
-        title "Test Schema"
+        name "TestSchema"
         description "A test schema"
         version 1
 
@@ -22,7 +22,7 @@ RSpec.describe Structify do
     end
 
     expect(test_class.json_schema).to include(
-      name: "Test Schema",
+      name: "TestSchema",
       description: "A test schema",
       parameters: {
         type: "object",

@@ -26,7 +26,7 @@ RSpec.describe Structify::Model do
   describe ".schema_definition" do
     it "allows defining a schema with all available options" do
       model_class.schema_definition do
-        title "Article Extraction"
+        name "ArticleExtraction"
         description "Extract article metadata"
         version 2
 
@@ -38,12 +38,52 @@ RSpec.describe Structify::Model do
       expect(model_class.schema_builder).to be_a(Structify::SchemaBuilder)
       expect(model_class.extraction_version).to eq(2)
     end
+    
+    it "validates schema name format" do
+      # Valid names
+      expect {
+        model_class.schema_definition do
+          name "ValidName"
+        end
+      }.not_to raise_error
+      
+      expect {
+        model_class.schema_definition do
+          name "valid_name_with_underscores"
+        end
+      }.not_to raise_error
+      
+      expect {
+        model_class.schema_definition do
+          name "valid-name-with-hyphens"
+        end
+      }.not_to raise_error
+      
+      expect {
+        model_class.schema_definition do
+          name "valid123_with_numbers"
+        end
+      }.not_to raise_error
+      
+      # Invalid names with spaces or special characters
+      expect {
+        model_class.schema_definition do
+          name "Invalid Name With Spaces"
+        end
+      }.to raise_error(ArgumentError, /Schema name must only contain alphanumeric characters/)
+      
+      expect {
+        model_class.schema_definition do
+          name "invalid!name@with#special$chars"
+        end
+      }.to raise_error(ArgumentError, /Schema name must only contain alphanumeric characters/)
+    end
   end
 
   describe ".json_schema" do
     before do
       model_class.schema_definition do
-        title "Article Extraction"
+        name "ArticleExtraction"
         description "Extract article metadata"
         field :title, :string, required: true
         field :summary, :text, description: "A brief summary"
@@ -54,7 +94,7 @@ RSpec.describe Structify::Model do
     it "generates a valid JSON schema" do
       schema = model_class.json_schema
 
-      expect(schema[:name]).to eq("Article Extraction")
+      expect(schema[:name]).to eq("ArticleExtraction")
       expect(schema[:description]).to eq("Extract article metadata")
       expect(schema[:parameters]).to be_a(Hash)
       expect(schema[:parameters][:required]).to eq(["title"])
@@ -69,7 +109,7 @@ RSpec.describe Structify::Model do
           include Structify::Model
 
           schema_definition do
-            title "Article Extraction with Thinking"
+            name "ArticleExtractionThinking"
             description "Extract article metadata with chain of thought"
             thinking true
             field :title, :string, required: true
@@ -406,7 +446,7 @@ RSpec.describe Structify::Model do
 
     it "defaults to version 1 if not specified" do
       model_class.schema_definition do
-        title "Test"
+        name "Test"
       end
 
       expect(model_class.extraction_version).to eq(1)
@@ -422,7 +462,7 @@ RSpec.describe Structify::Model do
           # Define version 1 schema
           schema_definition do
             version 1
-            title "Article Extraction V1"
+            name "ArticleExtractionV1"
 
             field :title, :string
             field :category, :string
@@ -440,7 +480,7 @@ RSpec.describe Structify::Model do
           # Define version 2 schema with additional fields
           schema_definition do
             version 2
-            title "Article Extraction V2"
+            name "ArticleExtractionV2"
 
             # Fields from version 1
             field :title, :string, versions: 1..999
@@ -463,7 +503,7 @@ RSpec.describe Structify::Model do
           # Define version 3 schema with simplified lifecycle syntax
           schema_definition do
             version 3
-            title "Article Extraction V3"
+            name "ArticleExtractionV3"
 
             # Fields available in all versions (1..999)
             field :title, :string, versions: 1..999
@@ -491,7 +531,7 @@ RSpec.describe Structify::Model do
 
           schema_definition do
             version 4
-            title "Simplified Versioning Example"
+            name "SimplifiedVersioning"
 
             # All of these syntaxes should work
             field :always_available, :string, versions: 1..999  # From v1 onward
