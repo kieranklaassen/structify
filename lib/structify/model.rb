@@ -4,8 +4,6 @@ require "active_support/concern"
 require "active_support/core_ext/class/attribute"
 require "attr_json"
 require_relative "schema_serializer"
-require_relative "field_validations"
-require_relative "types/validated_array"
 
 module Structify
   # The Model module provides a DSL for defining LLM extraction schemas in your Rails models.
@@ -33,7 +31,6 @@ module Structify
       include Structify::FieldValidation
       
       class_attribute :schema_builder, instance_writer: false, default: nil
-      class_attribute :skip_validation, instance_writer: false, default: false
 
       # Use the configured default container attribute
       attr_json_config(default_container_attribute: Structify.configuration.default_container_attribute)
@@ -301,8 +298,7 @@ module Structify
         validations: validations
       }.compact
       
-      # Apply validations to the model
-      FieldValidations.apply_field_validations(model, name, field_config)
+      # Note: Field validations are handled automatically by the FieldValidation module
     end
     
     # Check if a version is within a given range/array of versions

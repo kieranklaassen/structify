@@ -29,16 +29,8 @@ module Structify
     # @return [Symbol] The default container attribute for JSON fields
     attr_accessor :default_container_attribute
     
-    # @return [Boolean] Whether to validate data against schema on save
-    attr_accessor :validate_on_save
-    
-    # @return [Boolean] Whether to raise exceptions on validation failure instead of adding errors
-    attr_accessor :strict_validation
-    
     def initialize
       @default_container_attribute = :json_attributes
-      @validate_on_save = true  # Enable validation by default
-      @strict_validation = false  # Add errors instead of raising by default
     end
   end
   
