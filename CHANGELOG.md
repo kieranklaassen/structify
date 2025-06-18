@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Always-on validation**: Automatic validation of all LLM responses against schema definitions
+- **Custom exceptions for retry logic**: `TypeMismatchError`, `RequiredFieldError`, `EnumValidationError`, `ArrayConstraintError`, `ObjectValidationError`
+
+### Changed
+
+- **Breaking**: Validation is now always enabled and raises exceptions instead of ActiveRecord errors
+
 ## [0.3.4] - 2025-03-19
 
 ### Changed

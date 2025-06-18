@@ -1,6 +1,7 @@
 # Structify
 
 [![Gem Version](https://badge.fury.io/rb/structify.svg)](https://badge.fury.io/rb/structify)
+[![CI](https://github.com/kieranklaassen/structify/actions/workflows/ci.yml/badge.svg)](https://github.com/kieranklaassen/structify/actions/workflows/ci.yml)
 
 A Ruby gem for extracting structured data from content using LLMs in Rails applications
 
@@ -10,8 +11,8 @@ Structify helps you extract structured data from unstructured content in your Ra
 
 - **Define extraction schemas** directly in your ActiveRecord models
 - **Generate JSON schemas** to use with OpenAI, Anthropic, or other LLM providers
-- **Store and validate** extracted data in your models
-- **Access structured data** through typed model attributes
+- **Store and validate** extracted data with ActiveRecord validations
+- **Access structured data** through typed model attributes with full validation support
 
 ## Use Cases
 
@@ -247,6 +248,79 @@ field :author, :object, properties: {
 }
 ```
 
+## Field Validations
+
+Structify leverages attr_json's integration with ActiveRecord validations to provide comprehensive field-level validation:
+
+```ruby
+schema_definition do
+  # Basic validations
+  field :email, :string, required: true, validations: {
+    format: /\A[\w+\-.]+@[a-z\d\-]+(\.[a-z\d\-]+)*\.[a-z]+\z/i
+  }
+  
+  # Length validations
+  field :title, :string, validations: {
+    length: { minimum: 5, maximum: 200 }
+  }
+  
+  # Numeric validations
+  field :age, :integer, validations: {
+    numericality: { greater_than_or_equal_to: 18 }
+  }
+  
+  # Custom validations
+  field :url, :string, validations: {
+    custom: ->(record, field_name) {
+      value = record.send(field_name)
+      if value && !URI.parse(value).host
+        record.errors.add(field_name, "must be a valid URL")
+      end
+    }
+  }
+end
+```
+
+### Array Validations
+
+Arrays have special validation support:
+
+```ruby
+field :tags, :array,
+  min_items: 1,
+  max_items: 10,
+  unique_items: true,
+  validations: {
+    custom: ->(record, field_name) {
+      tags = record.send(field_name) || []
+      tags.each do |tag|
+        unless tag.is_a?(String) && tag.length >= 2
+          record.errors.add(field_name, "items must be strings with 2+ characters")
+        end
+      end
+    }
+  }
+```
+
+### Nested Model Validations
+
+When using nested models, their validations are automatically applied:
+
+```ruby
+class Address
+  include AttrJson::Model
+  
+  attr_json :street, :string
+  attr_json :city, :string
+  validates :street, :city, presence: true
+end
+
+# In your schema:
+field :address, Address.to_type, required: true
+```
+
+See the [validation guide](docs/validation_guide.md) for comprehensive documentation.
+
 ## Chain of Thought Mode
 
 Structify supports a "thinking" mode that automatically requests chain of thought reasoning from the LLM:
@@ -352,6 +426,18 @@ article.custom_json_column  # => { "title" => "My Title", "version" => 1, ... }
 ```
 
 
+## Validation & Error Handling
+
+Structify validates all LLM responses and raises specific exceptions for retry logic:
+
+```ruby
+begin
+  article.update!(llm_response)
+rescue Structify::LLMValidationError => e
+  RetryExtractionJob.perform_later(article.id, content, e.field_name)
+end
+```
+
 ## Understanding Structify's Role
 
 Structify is designed as a **bridge** between your Rails models and LLM extraction services:
@@ -360,10 +446,10 @@ Structify is designed as a **bridge** between your Rails models and LLM extracti
 
 - ✅ **Define extraction schemas** directly in your ActiveRecord models
 - ✅ **Generate compatible JSON schemas** for OpenAI, Anthropic, and other LLM providers
-- ✅ **Store and validate** extracted data against your schema
+- ✅ **Store and validate** extracted data with automatic error detection
 - ✅ **Provide typed access** to extracted fields through your models
 - ✅ **Handle schema versioning** and backward compatibility
-- ✅ **Support chain of thought reasoning** with the thinking mode option
+- ✅ **Raise specific exceptions** for different validation failures to enable retry logic
 
 ### What You Need To Implement
 
