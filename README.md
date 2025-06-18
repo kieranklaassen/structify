@@ -426,47 +426,17 @@ article.custom_json_column  # => { "title" => "My Title", "version" => 1, ... }
 ```
 
 
-## Handling LLM Errors and Retries
+## Validation & Error Handling
 
-Structify automatically validates all LLM responses and raises specific exceptions when validation fails. This makes it easy to handle LLM hallucinations and retry with better prompts.
-
-### **Simple Retry Pattern**
+Structify validates all LLM responses and raises specific exceptions for retry logic:
 
 ```ruby
 begin
   article.update!(llm_response)
 rescue Structify::LLMValidationError => e
-  Rails.logger.warn "LLM validation failed: #{e.message}"
-  
-  # Retry in background job with improved prompt
-  RetryExtractionJob.perform_later(article.id, original_content, e.field_name)
+  RetryExtractionJob.perform_later(article.id, content, e.field_name)
 end
 ```
-
-### **Background Job Example**
-
-```ruby
-class RetryExtractionJob < ApplicationJob
-  def perform(article_id, content, failed_field)
-    article = Article.find(article_id)
-    
-    # Improve prompt based on what failed
-    improved_prompt = "#{content}\n\nIMPORTANT: Pay special attention to the '#{failed_field}' field format."
-    
-    # Call LLM again with improved prompt
-    new_response = call_llm_with_improved_prompt(improved_prompt)
-    article.update!(new_response)
-  end
-end
-```
-
-### **Common Validation Errors**
-
-- `TypeMismatchError` - LLM returned wrong type (e.g., string instead of array)
-- `RequiredFieldError` - Missing required fields  
-- `EnumValidationError` - Invalid enum values
-- `ArrayConstraintError` - Array validation failed
-- `ObjectValidationError` - Object property validation failed
 
 ## Understanding Structify's Role
 
@@ -476,25 +446,23 @@ Structify is designed as a **bridge** between your Rails models and LLM extracti
 
 - ✅ **Define extraction schemas** directly in your ActiveRecord models
 - ✅ **Generate compatible JSON schemas** for OpenAI, Anthropic, and other LLM providers
-- ✅ **Store and validate** extracted data against your schema with automatic error detection
+- ✅ **Store and validate** extracted data with automatic error detection
 - ✅ **Provide typed access** to extracted fields through your models
 - ✅ **Handle schema versioning** and backward compatibility
-- ✅ **Support chain of thought reasoning** with the thinking mode option
-- ✅ **Raise specific exceptions** for different validation failures to enable intelligent retry logic
+- ✅ **Raise specific exceptions** for different validation failures to enable retry logic
 
 ### What You Need To Implement
 
 - 🔧 **API integration** with your chosen LLM provider (see examples above)
 - 🔧 **Processing logic** for when and how to extract data
 - 🔧 **Authentication** and API key management
-- 🔧 **Error handling and retries** for API calls (see retry patterns above)
+- 🔧 **Error handling and retries** for API calls
 
 This separation of concerns allows you to:
 1. Use any LLM provider and model you prefer
 2. Implement extraction logic specific to your application
 3. Handle API access in a way that fits your application architecture
 4. Change LLM providers without changing your data model
-5. Build robust retry logic that improves LLM response quality over time
 
 ## License
 
