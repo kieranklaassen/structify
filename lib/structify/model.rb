@@ -4,6 +4,8 @@ require "active_support/concern"
 require "active_support/core_ext/class/attribute"
 require "attr_json"
 require_relative "schema_serializer"
+require_relative "field_validations"
+require_relative "types/validated_array"
 
 module Structify
   # The Model module provides a DSL for defining LLM extraction schemas in your Rails models.
@@ -28,7 +30,10 @@ module Structify
 
     included do
       include AttrJson::Record
+      include Structify::FieldValidation
+      
       class_attribute :schema_builder, instance_writer: false, default: nil
+      class_attribute :skip_validation, instance_writer: false, default: false
 
       # Use the configured default container attribute
       attr_json_config(default_container_attribute: Structify.configuration.default_container_attribute)
@@ -40,6 +45,19 @@ module Structify
       record_data = self.send(container_attribute) || {}
       record_version = record_data["version"] || 1
       record_version >= required_version
+    end
+    
+    # Check if field validations should be applied
+    # This respects the same configuration as JSON Schema validation
+    def should_validate_fields?
+      # Skip if validation is disabled for this class
+      return false if self.class.skip_validation
+      
+      # Skip if validation is globally disabled
+      return false unless Structify.configuration.validate_on_save
+      
+      # Otherwise, validate fields
+      true
     end
     
     # Get the stored version of this record
@@ -185,10 +203,11 @@ module Structify
     # @param max_items [Integer] For array type, maximum number of items
     # @param unique_items [Boolean] For array type, whether items must be unique
     # @param versions [Range, Array, Integer] The versions this field is available in (default: current version onwards)
+    # @param validations [Hash] Additional validations to apply (e.g., { format: /\A\d+\z/, length: { minimum: 3 } })
     # @return [void]
     def field(name, type, required: false, description: nil, enum: nil, 
               items: nil, properties: nil, min_items: nil, max_items: nil, 
-              unique_items: nil, versions: nil)
+              unique_items: nil, versions: nil, validations: nil)
       
       # Handle version information
       version_range = if versions
@@ -267,6 +286,23 @@ module Structify
 
       # Define custom accessor that checks version compatibility
       define_version_range_accessors(name, attr_type, version_range)
+      
+      # Define setter interceptor to capture raw values for validation
+      define_validation_interceptor(name)
+      
+      # Apply field validations using attr_json and ActiveRecord validations
+      field_config = {
+        type: type,
+        required: required,
+        enum: enum,
+        min_items: min_items,
+        max_items: max_items,
+        unique_items: unique_items,
+        validations: validations
+      }.compact
+      
+      # Apply validations to the model
+      FieldValidations.apply_field_validations(model, name, field_config)
     end
     
     # Check if a version is within a given range/array of versions
@@ -360,6 +396,40 @@ module Structify
           
           # Call original method
           _original_#{name}
+        end
+      RUBY
+    end
+    
+    # Define setter interceptor to capture raw values for validation
+    #
+    # @param name [Symbol] The field name
+    # @return [void]
+    def define_validation_interceptor(name)
+      model.class_eval <<-RUBY, __FILE__, __LINE__ + 1
+        # Store original setter if exists
+        if method_defined?(:#{name}=)
+          alias_method :_original_setter_#{name}=, :#{name}=
+        end
+        
+        # Override setter to capture raw value
+        def #{name}=(value)
+          # Initialize raw values hash if needed
+          @_raw_field_values ||= {}
+          
+          # Store the raw value before type coercion
+          @_raw_field_values['#{name}'] = value
+          
+          # Call the original setter (or super if no original)
+          if respond_to?(:_original_setter_#{name}=)
+            send(:_original_setter_#{name}=, value)
+          else
+            super(value)
+          end
+        end
+        
+        # Accessor for raw values (used by validation)
+        def _raw_field_values
+          @_raw_field_values ||= {}
         end
       RUBY
     end

@@ -1,6 +1,7 @@
 # Structify
 
 [![Gem Version](https://badge.fury.io/rb/structify.svg)](https://badge.fury.io/rb/structify)
+[![CI](https://github.com/kieranklaassen/structify/actions/workflows/ci.yml/badge.svg)](https://github.com/kieranklaassen/structify/actions/workflows/ci.yml)
 
 A Ruby gem for extracting structured data from content using LLMs in Rails applications
 
@@ -10,8 +11,8 @@ Structify helps you extract structured data from unstructured content in your Ra
 
 - **Define extraction schemas** directly in your ActiveRecord models
 - **Generate JSON schemas** to use with OpenAI, Anthropic, or other LLM providers
-- **Store and validate** extracted data in your models
-- **Access structured data** through typed model attributes
+- **Store and validate** extracted data with ActiveRecord validations
+- **Access structured data** through typed model attributes with full validation support
 
 ## Use Cases
 
@@ -247,6 +248,79 @@ field :author, :object, properties: {
 }
 ```
 
+## Field Validations
+
+Structify leverages attr_json's integration with ActiveRecord validations to provide comprehensive field-level validation:
+
+```ruby
+schema_definition do
+  # Basic validations
+  field :email, :string, required: true, validations: {
+    format: /\A[\w+\-.]+@[a-z\d\-]+(\.[a-z\d\-]+)*\.[a-z]+\z/i
+  }
+  
+  # Length validations
+  field :title, :string, validations: {
+    length: { minimum: 5, maximum: 200 }
+  }
+  
+  # Numeric validations
+  field :age, :integer, validations: {
+    numericality: { greater_than_or_equal_to: 18 }
+  }
+  
+  # Custom validations
+  field :url, :string, validations: {
+    custom: ->(record, field_name) {
+      value = record.send(field_name)
+      if value && !URI.parse(value).host
+        record.errors.add(field_name, "must be a valid URL")
+      end
+    }
+  }
+end
+```
+
+### Array Validations
+
+Arrays have special validation support:
+
+```ruby
+field :tags, :array,
+  min_items: 1,
+  max_items: 10,
+  unique_items: true,
+  validations: {
+    custom: ->(record, field_name) {
+      tags = record.send(field_name) || []
+      tags.each do |tag|
+        unless tag.is_a?(String) && tag.length >= 2
+          record.errors.add(field_name, "items must be strings with 2+ characters")
+        end
+      end
+    }
+  }
+```
+
+### Nested Model Validations
+
+When using nested models, their validations are automatically applied:
+
+```ruby
+class Address
+  include AttrJson::Model
+  
+  attr_json :street, :string
+  attr_json :city, :string
+  validates :street, :city, presence: true
+end
+
+# In your schema:
+field :address, Address.to_type, required: true
+```
+
+See the [validation guide](docs/validation_guide.md) for comprehensive documentation.
+
 ## Chain of Thought Mode
 
 Structify supports a "thinking" mode that automatically requests chain of thought reasoning from the LLM:
@@ -352,6 +426,48 @@ article.custom_json_column  # => { "title" => "My Title", "version" => 1, ... }
 ```
 
 
+## Handling LLM Errors and Retries
+
+Structify automatically validates all LLM responses and raises specific exceptions when validation fails. This makes it easy to handle LLM hallucinations and retry with better prompts.
+
+### **Simple Retry Pattern**
+
+```ruby
+begin
+  article.update!(llm_response)
+rescue Structify::LLMValidationError => e
+  Rails.logger.warn "LLM validation failed: #{e.message}"
+  
+  # Retry in background job with improved prompt
+  RetryExtractionJob.perform_later(article.id, original_content, e.field_name)
+end
+```
+
+### **Background Job Example**
+
+```ruby
+class RetryExtractionJob < ApplicationJob
+  def perform(article_id, content, failed_field)
+    article = Article.find(article_id)
+    
+    # Improve prompt based on what failed
+    improved_prompt = "#{content}\n\nIMPORTANT: Pay special attention to the '#{failed_field}' field format."
+    
+    # Call LLM again with improved prompt
+    new_response = call_llm_with_improved_prompt(improved_prompt)
+    article.update!(new_response)
+  end
+end
+```
+
+### **Common Validation Errors**
+
+- `TypeMismatchError` - LLM returned wrong type (e.g., string instead of array)
+- `RequiredFieldError` - Missing required fields  
+- `EnumValidationError` - Invalid enum values
+- `ArrayConstraintError` - Array validation failed
+- `ObjectValidationError` - Object property validation failed
+
 ## Understanding Structify's Role
 
 Structify is designed as a **bridge** between your Rails models and LLM extraction services:
@@ -360,23 +476,25 @@ Structify is designed as a **bridge** between your Rails models and LLM extracti
 
 - ✅ **Define extraction schemas** directly in your ActiveRecord models
 - ✅ **Generate compatible JSON schemas** for OpenAI, Anthropic, and other LLM providers
-- ✅ **Store and validate** extracted data against your schema
+- ✅ **Store and validate** extracted data against your schema with automatic error detection
 - ✅ **Provide typed access** to extracted fields through your models
 - ✅ **Handle schema versioning** and backward compatibility
 - ✅ **Support chain of thought reasoning** with the thinking mode option
+- ✅ **Raise specific exceptions** for different validation failures to enable intelligent retry logic
 
 ### What You Need To Implement
 
 - 🔧 **API integration** with your chosen LLM provider (see examples above)
 - 🔧 **Processing logic** for when and how to extract data
 - 🔧 **Authentication** and API key management
-- 🔧 **Error handling and retries** for API calls
+- 🔧 **Error handling and retries** for API calls (see retry patterns above)
 
 This separation of concerns allows you to:
 1. Use any LLM provider and model you prefer
 2. Implement extraction logic specific to your application
 3. Handle API access in a way that fits your application architecture
 4. Change LLM providers without changing your data model
+5. Build robust retry logic that improves LLM response quality over time
 
 ## License
 
