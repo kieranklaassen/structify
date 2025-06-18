@@ -6,26 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Always-on field validation**: Automatic validation of all LLM responses against schema definitions
-- **Custom exception hierarchy**: Specific exceptions for different validation failures to enable retry logic
-  - `Structify::LLMValidationError` - Base exception for all validation errors
-  - `Structify::TypeMismatchError` - When LLM returns wrong data type (e.g., string instead of array)
-  - `Structify::RequiredFieldError` - When required fields are missing
-  - `Structify::EnumValidationError` - When values don't match allowed enum options
-  - `Structify::ArrayConstraintError` - When array constraints are violated (min_items, max_items, unique_items)
-  - `Structify::ObjectValidationError` - When object property validation fails
-- **Comprehensive validation support**: 
-  - Type validation for all field types (string, integer, array, object, etc.)
-  - Required field validation
-  - Enum value validation
-  - Array constraint validation (min_items, max_items, unique_items)
-  - Nested object property validation
-  - Array item validation including complex objects
+- **Always-on validation**: Automatic validation of all LLM responses against schema definitions
+- **Custom exceptions for retry logic**: `TypeMismatchError`, `RequiredFieldError`, `EnumValidationError`, `ArrayConstraintError`, `ObjectValidationError`
 
 ### Changed
 
-- **Breaking**: Validation is now always enabled and cannot be disabled
-- Field validation errors now raise exceptions instead of adding ActiveRecord errors for better LLM retry handling
+- **Breaking**: Validation is now always enabled and raises exceptions instead of ActiveRecord errors
 
 ## [0.3.4] - 2025-03-19
 
