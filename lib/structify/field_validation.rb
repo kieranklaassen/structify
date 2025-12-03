@@ -37,13 +37,8 @@ module Structify
     def validate_structify_fields
       return unless self.class.structify_schema
 
-      schema_hash = self.class.structify_schema.new.to_json_schema
-      # ruby_llm-schema nests properties under :schema
-      schema_object = schema_hash[:schema] || schema_hash["schema"] || schema_hash
-      properties = schema_object[:properties] || schema_object["properties"] || {}
-      required_fields = schema_object[:required] || schema_object["required"] || []
-      # Convert required fields to strings for comparison
-      required_strings = required_fields.map(&:to_s)
+      properties = self.class.cached_properties
+      required_strings = self.class.cached_required_fields
 
       properties.each do |field_name, field_def|
         validate_field(field_name.to_sym, field_def, required_strings.include?(field_name.to_s))
@@ -52,7 +47,7 @@ module Structify
 
     # Validate a single field against its definition.
     def validate_field(field_name, field_def, is_required)
-      value = send(field_name) rescue nil
+      value = respond_to?(field_name) ? send(field_name) : nil
 
       # Required field validation
       validate_required_field(field_name, value, is_required)
@@ -88,32 +83,12 @@ module Structify
 
     # Validate field type matches expected type.
     def validate_field_type(field_name, value, expected_type)
-      valid = case expected_type.to_s
-              when "string"
-                value.is_a?(String)
-              when "integer"
-                value.is_a?(Integer)
-              when "number"
-                value.is_a?(Numeric)
-              when "boolean"
-                value.is_a?(TrueClass) || value.is_a?(FalseClass)
-              when "array"
-                value.is_a?(Array)
-              when "object"
-                value.is_a?(Hash)
-              else
-                true
-              end
-
-      unless valid
-        actual_type = value.class.name.downcase
-        actual_type = "boolean" if [TrueClass, FalseClass].include?(value.class)
-
+      unless type_matches?(value, expected_type)
         raise TypeMismatchError.new(
           field_name,
           value,
           expected_type,
-          actual_type,
+          actual_type_name(value),
           record: self
         )
       end
@@ -206,31 +181,11 @@ module Structify
 
     # Validate array item type
     def validate_array_item_type(field_name, item, expected_type, index)
-      valid = case expected_type.to_s
-              when "string"
-                item.is_a?(String)
-              when "integer"
-                item.is_a?(Integer)
-              when "number"
-                item.is_a?(Numeric)
-              when "boolean"
-                item.is_a?(TrueClass) || item.is_a?(FalseClass)
-              when "object"
-                item.is_a?(Hash)
-              when "array"
-                item.is_a?(Array)
-              else
-                true
-              end
-
-      unless valid
-        actual_type = item.class.name.downcase
-        actual_type = "boolean" if [TrueClass, FalseClass].include?(item.class)
-
+      unless type_matches?(item, expected_type)
         raise ArrayConstraintError.new(
           field_name,
           item,
-          "item at index #{index} expected #{expected_type}, got #{actual_type}: #{item.inspect}",
+          "item at index #{index} expected #{expected_type}, got #{actual_type_name(item)}: #{item.inspect}",
           record: self
         )
       end
@@ -317,27 +272,8 @@ module Structify
 
     # Validate object property type
     def validate_object_property_type(field_name, prop_name, prop_value, expected_type, context = nil)
-      valid = case expected_type.to_s
-              when "string"
-                prop_value.is_a?(String)
-              when "integer"
-                prop_value.is_a?(Integer)
-              when "number"
-                prop_value.is_a?(Numeric)
-              when "boolean"
-                prop_value.is_a?(TrueClass) || prop_value.is_a?(FalseClass)
-              when "object"
-                prop_value.is_a?(Hash)
-              when "array"
-                prop_value.is_a?(Array)
-              else
-                true
-              end
-
-      unless valid
-        actual_type = prop_value.class.name.downcase
-        actual_type = "boolean" if [TrueClass, FalseClass].include?(prop_value.class)
-
+      unless type_matches?(prop_value, expected_type)
+        actual_type = actual_type_name(prop_value)
         property_message = "property '#{prop_name}' expected #{expected_type}, got #{actual_type}: #{prop_value.inspect}"
         property_message = "#{context} #{property_message}" if context
 
@@ -371,6 +307,24 @@ module Structify
           record: self
         )
       end
+    end
+
+    # Check if a value matches the expected type
+    def type_matches?(value, expected_type)
+      case expected_type.to_s
+      when "string" then value.is_a?(String)
+      when "integer" then value.is_a?(Integer)
+      when "number" then value.is_a?(Numeric)
+      when "boolean" then [TrueClass, FalseClass].include?(value.class)
+      when "array" then value.is_a?(Array)
+      when "object" then value.is_a?(Hash)
+      else true
+      end
+    end
+
+    # Get the human-readable type name for a value
+    def actual_type_name(value)
+      [TrueClass, FalseClass].include?(value.class) ? "boolean" : value.class.name.downcase
     end
   end
 end

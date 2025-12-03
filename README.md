@@ -218,6 +218,45 @@ rescue Structify::LLMValidationError => e
 end
 ```
 
+### Security Note
+
+Validation error messages include field values for debugging purposes. If you extract sensitive data (PII, credentials, financial data), ensure your error handling sanitizes exceptions before logging:
+
+```ruby
+begin
+  article.save!
+rescue Structify::LLMValidationError => e
+  # Log without sensitive data
+  Rails.logger.error("Validation failed for field: #{e.field_name}")
+  # Don't log e.message or e.value directly
+end
+```
+
+## Upgrading from 0.x to 1.0
+
+### Breaking Changes
+
+1. **Schema DSL syntax changed** - Uses ruby_llm-schema DSL directly:
+   ```ruby
+   # OLD (0.x)
+   schema_definition do
+     field :title, :string, required: true
+     field :count, :integer
+   end
+
+   # NEW (1.0)
+   schema_definition do
+     string :title
+     integer :count, required: false
+   end
+   ```
+
+2. **Fields are required by default** - In 1.0, all fields are required unless you specify `required: false`
+
+3. **Versioning removed** - The `version`, `versions:`, `stored_version`, and `version_compatible_with?` features have been removed. If you need schema versioning, manage it at the application level.
+
+4. **SchemaSerializer removed** - Use `Model.json_schema` directly which returns the schema in LLM-compatible format.
+
 ## License
 
 [MIT License](https://opensource.org/licenses/MIT)

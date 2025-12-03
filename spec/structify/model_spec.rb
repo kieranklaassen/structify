@@ -308,4 +308,91 @@ RSpec.describe Structify::Model do
       expect(schema[:required]).not_to include("optional_field")
     end
   end
+
+  describe "schema caching" do
+    before do
+      model_class.schema_definition do
+        name "CachingTest"
+        string :title
+        integer :count, required: false
+      end
+    end
+
+    it "caches json_schema between calls" do
+      schema1 = model_class.cached_json_schema
+      schema2 = model_class.cached_json_schema
+
+      expect(schema1).to be(schema2) # Same object
+    end
+
+    it "caches properties between calls" do
+      props1 = model_class.cached_properties
+      props2 = model_class.cached_properties
+
+      expect(props1).to be(props2) # Same object
+    end
+
+    it "returns required fields as strings not symbols" do
+      required = model_class.cached_required_fields
+
+      expect(required).to all(be_a(String))
+      expect(required).to include("title")
+    end
+  end
+
+  describe "without schema definition" do
+    let(:bare_model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
+        # No schema_definition called
+      end
+    end
+
+    it "returns nil for json_schema" do
+      expect(bare_model_class.json_schema).to be_nil
+    end
+
+    it "returns empty hash for cached_properties" do
+      expect(bare_model_class.cached_properties).to eq({})
+    end
+
+    it "returns empty array for cached_required_fields" do
+      expect(bare_model_class.cached_required_fields).to eq([])
+    end
+
+    it "does not raise on save" do
+      instance = bare_model_class.new
+      expect { instance.save! }.not_to raise_error
+    end
+  end
+
+  describe "with falsy but valid values" do
+    before do
+      model_class.schema_definition do
+        name "FalsyValues"
+        boolean :active, required: false
+        integer :count, required: false
+        string :title, required: false
+      end
+    end
+
+    it "accepts false for boolean fields" do
+      instance = model_class.new(active: false)
+      expect { instance.save! }.not_to raise_error
+      expect(instance.active).to eq(false)
+    end
+
+    it "accepts 0 for integer fields" do
+      instance = model_class.new(count: 0)
+      expect { instance.save! }.not_to raise_error
+      expect(instance.count).to eq(0)
+    end
+
+    it "accepts empty string when field is optional" do
+      instance = model_class.new(title: "")
+      # Empty string is allowed for optional fields
+      expect { instance.save! }.not_to raise_error
+    end
+  end
 end

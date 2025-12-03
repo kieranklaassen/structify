@@ -66,6 +66,43 @@ module Structify
         create_attr_json_fields_from_schema
       end
 
+      # Get the cached JSON schema from RubyLLM::Schema
+      # This is memoized at the class level for performance
+      #
+      # @return [Hash, nil] The raw JSON schema from RubyLLM::Schema
+      def cached_json_schema
+        @cached_json_schema ||= structify_schema&.new&.to_json_schema
+      end
+
+      # Get the cached schema object (properties, required, etc.)
+      # This extracts the schema from the nested structure
+      #
+      # @return [Hash] The schema object
+      def cached_schema_object
+        @cached_schema_object ||= begin
+          schema = cached_json_schema
+          return {} unless schema
+          schema[:schema] || schema["schema"] || schema
+        end
+      end
+
+      # Get the cached properties hash from the schema
+      #
+      # @return [Hash] The properties definition
+      def cached_properties
+        @cached_properties ||= cached_schema_object[:properties] || cached_schema_object["properties"] || {}
+      end
+
+      # Get the cached required fields list from the schema
+      #
+      # @return [Array<String>] The required field names as strings
+      def cached_required_fields
+        @cached_required_fields ||= begin
+          required = cached_schema_object[:required] || cached_schema_object["required"] || []
+          required.map(&:to_s)
+        end
+      end
+
       # Get the JSON schema representation
       # Returns a flattened format compatible with LLM APIs
       #
@@ -73,16 +110,14 @@ module Structify
       def json_schema
         return nil unless structify_schema
 
-        raw_schema = structify_schema.new.to_json_schema
-        schema_object = raw_schema[:schema] || raw_schema["schema"] || {}
-
-        required_fields = schema_object[:required] || schema_object["required"] || []
+        raw_schema = cached_json_schema
+        schema_object = cached_schema_object
 
         {
           name: raw_schema[:name],
           description: raw_schema[:description],
-          properties: schema_object[:properties] || schema_object["properties"] || {},
-          required: required_fields.map(&:to_s),
+          properties: cached_properties,
+          required: cached_required_fields,
           type: schema_object[:type] || schema_object["type"] || "object",
           additionalProperties: schema_object[:additionalProperties],
           strict: schema_object[:strict]
