@@ -28,4 +28,5 @@ Gem::Specification.new do |spec|
   # Runtime dependencies
   spec.add_dependency "activesupport", ">= 7.0", "< 9.0"
   spec.add_dependency "attr_json", "~> 2.1"
+  spec.add_dependency "ruby_llm-schema", "~> 0.2"
 end

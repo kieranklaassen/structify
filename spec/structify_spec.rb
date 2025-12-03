@@ -15,22 +15,15 @@ RSpec.describe Structify do
       schema_definition do
         name "TestSchema"
         description "A test schema"
-        version 1
 
-        field :title, :string, required: true
+        string :title
       end
     end
 
-    expect(test_class.json_schema).to include(
-      name: "TestSchema",
-      description: "A test schema",
-      parameters: {
-        type: "object",
-        required: ["title"],
-        properties: {
-          "title" => { type: "string" }
-        }
-      }
-    )
+    schema = test_class.json_schema
+    expect(schema[:name]).to eq("TestSchema")
+    expect(schema[:description]).to eq("A test schema")
+    expect(schema[:required]).to include("title")
+    expect(schema[:properties][:title][:type]).to eq("string")
   end
 end
