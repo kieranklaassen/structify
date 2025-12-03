@@ -37,7 +37,7 @@ module Structify
       class_attribute :structify_schema, instance_writer: false, default: nil
 
       # Use the configured default container attribute
-      attr_json_config(default_container_attribute: Structify.configuration.default_container_attribute)
+      attr_json_config(default_container_attribute: Structify.default_container_attribute)
     end
 
     # Check if the extracted data has been changed since the record was last saved

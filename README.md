@@ -76,9 +76,7 @@ add_column :articles, :json_attributes, :json   # MySQL
 
 ```ruby
 # config/initializers/structify.rb
-Structify.configure do |config|
-  config.default_container_attribute = :json_attributes
-end
+Structify.default_container_attribute = :json_attributes
 ```
 
 ## Usage

@@ -5,46 +5,11 @@ require_relative "structify/version"
 require_relative "structify/field_validation"
 require_relative "structify/model"
 
-# Structify is a DSL for defining extraction schemas for LLM-powered models.
-# It wraps RubyLLM::Schema to provide ActiveRecord integration and validation.
-#
-# @example
-#   class Article < ApplicationRecord
-#     include Structify::Model
-#
-#     schema_definition do
-#       name "ArticleExtraction"
-#       description "Extract article metadata"
-#
-#       string :title, description: "The article title"
-#       string :summary, required: false
-#       array :tags, of: :string, min_items: 1
-#     end
-#   end
 module Structify
-  # Configuration class for Structify
-  class Configuration
-    # @return [Symbol] The default container attribute for JSON fields
+  class << self
     attr_accessor :default_container_attribute
-
-    def initialize
-      @default_container_attribute = :json_attributes
-    end
   end
-
-  # @return [Structify::Configuration] The current configuration
-  def self.configuration
-    @configuration ||= Configuration.new
-  end
-
-  # Configure Structify
-  # @yield [config] The configuration block
-  # @yieldparam config [Structify::Configuration] The configuration object
-  # @return [Structify::Configuration] The updated configuration
-  def self.configure
-    yield(configuration) if block_given?
-    configuration
-  end
+  self.default_container_attribute = :json_attributes
 
   # Base error class for Structify
   class Error < StandardError; end
