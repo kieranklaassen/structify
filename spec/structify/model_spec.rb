@@ -395,4 +395,91 @@ RSpec.describe Structify::Model do
       expect { instance.save! }.not_to raise_error
     end
   end
+
+  describe "versioning" do
+    let(:versioned_model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
+      end
+    end
+
+    before do
+      versioned_model_class.schema_definition do
+        name "VersionedSchema"
+        version 2
+
+        string :title
+        string :summary, required: false
+      end
+    end
+
+    it "sets the schema version via extraction_version" do
+      expect(versioned_model_class.extraction_version).to eq(2)
+    end
+
+    it "creates a version attr_json field with default" do
+      instance = versioned_model_class.new
+      expect(instance).to respond_to(:version)
+      expect(instance.version).to eq(2)
+    end
+
+    it "stores version in the extracted data" do
+      instance = versioned_model_class.new(title: "Test")
+      instance.save!
+
+      expect(instance.stored_version).to eq(2)
+    end
+
+    it "returns stored_version from record data" do
+      instance = versioned_model_class.new(title: "Test")
+      instance.save!
+
+      # Manually set a different version in the container
+      instance.json_attributes["version"] = 1
+      expect(instance.stored_version).to eq(1)
+    end
+
+    it "checks version compatibility" do
+      instance = versioned_model_class.new(title: "Test", version: 2)
+      instance.save!
+
+      expect(instance.version_compatible_with?(1)).to be true
+      expect(instance.version_compatible_with?(2)).to be true
+      expect(instance.version_compatible_with?(3)).to be false
+    end
+
+    it "defaults to version 1 when no version in schema" do
+      bare_model = Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
+      end
+
+      bare_model.schema_definition do
+        name "UnversionedSchema"
+        string :title
+      end
+
+      expect(bare_model.extraction_version).to eq(1)
+    end
+
+    it "generates a schema_checksum for change detection" do
+      expect(versioned_model_class.schema_checksum).to be_a(String)
+      expect(versioned_model_class.schema_checksum.length).to eq(32) # MD5 hex length
+    end
+
+    it "returns different checksums for different schemas" do
+      other_model = Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
+      end
+
+      other_model.schema_definition do
+        name "OtherSchema"
+        string :different_field
+      end
+
+      expect(versioned_model_class.schema_checksum).not_to eq(other_model.schema_checksum)
+    end
+  end
 end

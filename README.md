@@ -230,6 +230,32 @@ rescue Structify::LLMValidationError => e
 end
 ```
 
+## Versioning
+
+Track schema versions for data migrations:
+
+```ruby
+class Article < ApplicationRecord
+  include Structify::Model
+
+  schema_definition do
+    name "ArticleExtraction"
+    version 2
+
+    string :title
+    string :summary
+  end
+end
+
+# Class methods
+Article.extraction_version  # => 2
+
+# Instance methods
+article.stored_version                # => 2 (from stored data)
+article.version_compatible_with?(1)   # => true
+article.version_compatible_with?(3)   # => false
+```
+
 ## Upgrading from 0.x to 1.0
 
 ### Breaking Changes
@@ -251,7 +277,7 @@ end
 
 2. **Fields are required by default** - In 1.0, all fields are required unless you specify `required: false`
 
-3. **Versioning removed** - The `version`, `versions:`, `stored_version`, and `version_compatible_with?` features have been removed. If you need schema versioning, manage it at the application level.
+3. **Versioning simplified** - The `versions:` field option has been removed. Use `version`, `stored_version`, and `version_compatible_with?` for schema-level versioning.
 
 4. **SchemaSerializer removed** - Use `Model.json_schema` directly which returns the schema in LLM-compatible format.
 
