@@ -24,59 +24,38 @@ RSpec.describe Structify::Model do
   end
 
   describe ".schema_definition" do
-    it "allows defining a schema with all available options" do
+    it "allows defining a schema with ruby_llm-schema DSL" do
       model_class.schema_definition do
         name "ArticleExtraction"
         description "Extract article metadata"
-        version 2
 
-        field :title, :string, required: true
-        field :summary, :text, description: "A brief summary"
-        field :category, :string, enum: ["tech", "business"]
+        string :title
+        string :summary, required: false
+        string :category, enum: ["tech", "business"]
       end
 
-      expect(model_class.schema_builder).to be_a(Structify::SchemaBuilder)
-      expect(model_class.extraction_version).to eq(2)
+      expect(model_class.structify_schema).to be < RubyLLM::Schema
     end
-    
-    it "validates schema name format" do
-      # Valid names
+
+    it "allows various schema name formats" do
+      # Valid names - ruby_llm-schema handles name validation
       expect {
         model_class.schema_definition do
           name "ValidName"
         end
       }.not_to raise_error
-      
+
       expect {
         model_class.schema_definition do
           name "valid_name_with_underscores"
         end
       }.not_to raise_error
-      
+
       expect {
         model_class.schema_definition do
           name "valid-name-with-hyphens"
         end
       }.not_to raise_error
-      
-      expect {
-        model_class.schema_definition do
-          name "valid123_with_numbers"
-        end
-      }.not_to raise_error
-      
-      # Invalid names with spaces or special characters
-      expect {
-        model_class.schema_definition do
-          name "Invalid Name With Spaces"
-        end
-      }.to raise_error(ArgumentError, /Schema name must only contain alphanumeric characters/)
-      
-      expect {
-        model_class.schema_definition do
-          name "invalid!name@with#special$chars"
-        end
-      }.to raise_error(ArgumentError, /Schema name must only contain alphanumeric characters/)
     end
   end
 
@@ -85,9 +64,10 @@ RSpec.describe Structify::Model do
       model_class.schema_definition do
         name "ArticleExtraction"
         description "Extract article metadata"
-        field :title, :string, required: true
-        field :summary, :text, description: "A brief summary"
-        field :category, :string, enum: ["tech", "business"]
+
+        string :title
+        string :summary, required: false, description: "A brief summary"
+        string :category, enum: ["tech", "business"]
       end
     end
 
@@ -96,751 +76,410 @@ RSpec.describe Structify::Model do
 
       expect(schema[:name]).to eq("ArticleExtraction")
       expect(schema[:description]).to eq("Extract article metadata")
-      expect(schema[:parameters]).to be_a(Hash)
-      expect(schema[:parameters][:required]).to eq(["title"])
-      expect(schema[:parameters][:properties]["title"]).to eq(type: "string")
-      expect(schema[:parameters][:properties]["category"][:enum]).to eq(["tech", "business"])
+      expect(schema[:properties]).to be_a(Hash)
+      expect(schema[:properties][:title]).to be_a(Hash)
+      expect(schema[:properties][:title][:type]).to eq("string")
     end
 
-    context "with thinking mode enabled" do
-      let(:thinking_model_class) do
-        Class.new(ActiveRecord::Base) do
-          self.table_name = "articles"
-          include Structify::Model
+    it "includes required fields" do
+      schema = model_class.json_schema
 
-          schema_definition do
-            name "ArticleExtractionThinking"
-            description "Extract article metadata with chain of thought"
-            thinking true
-            field :title, :string, required: true
-            field :summary, :text, description: "A brief summary"
-            field :category, :string, enum: ["tech", "business"]
-          end
-        end
-      end
+      # In ruby_llm-schema, fields are required by default unless marked required: false
+      required = schema[:required]
+      expect(required).to include("title")
+      expect(required).to include("category")
+      # summary has required: false so should not be in required
+      expect(required).not_to include("summary")
+    end
 
-      it "adds chain_of_thought field as the first property" do
-        schema = thinking_model_class.json_schema
+    it "includes enum values" do
+      schema = model_class.json_schema
 
-        # Check that chain_of_thought is the first property
-        expect(schema[:parameters][:properties].keys.first).to eq("chain_of_thought")
-
-        # Check that chain_of_thought has the correct type and description
-        expect(schema[:parameters][:properties]["chain_of_thought"]).to include(
-          type: "string",
-          description: "Explain your thought process step by step before determining the final values."
-        )
-
-        # Check that other fields are still present
-        expect(schema[:parameters][:properties]).to have_key("title")
-        expect(schema[:parameters][:properties]).to have_key("summary")
-        expect(schema[:parameters][:properties]).to have_key("category")
-      end
+      expect(schema[:properties][:category][:enum]).to eq(["tech", "business"])
     end
   end
 
   describe "different data types and field options" do
     it "supports string type" do
       model_class.schema_definition do
-        field :title, :string
+        string :title
       end
 
-      instance = model_class.new(title: "Test Title")
-      expect(instance.title).to eq("Test Title")
-
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["title"][:type]).to eq("string")
+      expect(schema[:properties][:title][:type]).to eq("string")
     end
 
     it "supports integer type" do
       model_class.schema_definition do
-        field :count, :integer
+        integer :count
       end
 
-      instance = model_class.new(count: 42)
-      expect(instance.count).to eq(42)
-
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["count"][:type]).to eq("integer")
+      expect(schema[:properties][:count][:type]).to eq("integer")
     end
 
     it "supports number type" do
       model_class.schema_definition do
-        field :price, :number
+        number :price
       end
 
-      instance = model_class.new(price: 99)
-      expect(instance.price).to eq(99)
-
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["price"][:type]).to eq("number")
+      expect(schema[:properties][:price][:type]).to eq("number")
     end
 
     it "supports boolean type" do
       model_class.schema_definition do
-        field :published, :boolean
+        boolean :published
       end
 
-      instance = model_class.new(published: true)
-      expect(instance.published).to eq(true)
-
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["published"][:type]).to eq("boolean")
+      expect(schema[:properties][:published][:type]).to eq("boolean")
     end
 
-    it "supports array type with items" do
+    it "supports array type with of option" do
       model_class.schema_definition do
-        field :tags, :array, items: { type: "string" }
+        array :tags, of: :string
       end
 
-      instance = model_class.new(tags: ["ruby", "rails"])
-      expect(instance.tags).to eq(["ruby", "rails"])
-
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["tags"][:type]).to eq("array")
-      expect(schema[:parameters][:properties]["tags"][:items]).to eq({ type: "string" })
+      expect(schema[:properties][:tags][:type]).to eq("array")
+      expect(schema[:properties][:tags][:items][:type]).to eq("string")
     end
 
     it "supports array type with constraints" do
       model_class.schema_definition do
-        field :tags, :array,
-          items: { type: "string" },
-          min_items: 1,
-          max_items: 5,
-          unique_items: true
+        array :tags, of: :string, min_items: 1, max_items: 5
       end
 
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["tags"][:minItems]).to eq(1)
-      expect(schema[:parameters][:properties]["tags"][:maxItems]).to eq(5)
-      expect(schema[:parameters][:properties]["tags"][:uniqueItems]).to eq(true)
+      expect(schema[:properties][:tags][:minItems]).to eq(1)
+      expect(schema[:properties][:tags][:maxItems]).to eq(5)
     end
 
     it "supports object type with properties" do
       model_class.schema_definition do
-        field :metadata, :object, properties: {
-          "author" => { type: "string" },
-          "views" => { type: "integer" }
-        }
+        object :metadata do
+          string :author
+          integer :views
+        end
       end
 
-      instance = model_class.new(metadata: { "author" => "John", "views" => 100 })
-      expect(instance.metadata).to eq({ "author" => "John", "views" => 100 })
-
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["metadata"][:type]).to eq("object")
-      expect(schema[:parameters][:properties]["metadata"][:properties]).to eq({
-        "author" => { type: "string" },
-        "views" => { type: "integer" }
-      })
+      expect(schema[:properties][:metadata][:type]).to eq("object")
+      expect(schema[:properties][:metadata][:properties][:author][:type]).to eq("string")
+      expect(schema[:properties][:metadata][:properties][:views][:type]).to eq("integer")
     end
 
-    it "supports complex nested object types" do
+    it "supports nested object types" do
       model_class.schema_definition do
-        field :user_data, :object, properties: {
-          "profile" => {
-            type: "object",
-            properties: {
-              "name" => { type: "string" },
-              "contact" => {
-                type: "object",
-                properties: {
-                  "email" => { type: "string" },
-                  "phone" => { type: "string" }
-                }
-              }
-            }
-          },
-          "preferences" => {
-            type: "object",
-            properties: {
-              "theme" => { type: "string" },
-              "notifications" => { type: "boolean" }
-            }
-          }
-        }
+        object :user_data do
+          string :name
+          object :contact do
+            string :email
+            string :phone, required: false
+          end
+        end
       end
 
-      # Test complex nested object storage and retrieval
-      complex_data = {
-        "profile" => {
-          "name" => "Jane Smith",
-          "contact" => {
-            "email" => "jane@example.com",
-            "phone" => "555-1234"
-          }
-        },
-        "preferences" => {
-          "theme" => "dark",
-          "notifications" => true
-        }
-      }
-
-      instance = model_class.new(user_data: complex_data)
-      expect(instance.user_data).to eq(complex_data)
-
-      # Access nested values
-      expect(instance.user_data["profile"]["name"]).to eq("Jane Smith")
-      expect(instance.user_data["profile"]["contact"]["email"]).to eq("jane@example.com")
-      expect(instance.user_data["preferences"]["theme"]).to eq("dark")
-
-      # Verify schema contains nested structure
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["user_data"][:type]).to eq("object")
-      expect(schema[:parameters][:properties]["user_data"][:properties]["profile"][:type]).to eq("object")
-      expect(schema[:parameters][:properties]["user_data"][:properties]["profile"][:properties]["contact"][:properties]["email"][:type]).to eq("string")
+      expect(schema[:properties][:user_data][:properties][:contact][:properties][:email][:type]).to eq("string")
     end
+  end
 
-    it "handles objects with required properties" do
+  describe "attr_json integration" do
+    before do
       model_class.schema_definition do
-        field :contact, :object, properties: {
-          "name" => { type: "string", required: true },
-          "email" => { type: "string", required: true },
-          "address" => { type: "string" }
-        }
+        string :title
+        integer :count, required: false
+        boolean :published, required: false
+        array :tags, of: :string, required: false
+        object :metadata, required: false do
+          string :author, required: false
+        end
       end
-
-      instance = model_class.new(contact: {
-        "name" => "Alice",
-        "email" => "alice@example.com",
-        "address" => "123 Main St"
-      })
-
-      expect(instance.contact["name"]).to eq("Alice")
-      expect(instance.contact["email"]).to eq("alice@example.com")
-
-      # Update a value in the object
-      instance.contact["name"] = "Alice Smith"
-      expect(instance.contact["name"]).to eq("Alice Smith")
-
-      # Add a new key to the object
-      instance.contact["phone"] = "555-5678"
-      expect(instance.contact["phone"]).to eq("555-5678")
-
-      # Verify schema has required properties correctly defined
-      schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["contact"][:required]).to include("name", "email")
-      expect(schema[:parameters][:properties]["contact"][:required].length).to eq(2)
-      expect(schema[:parameters][:properties]["contact"][:properties]["name"][:required]).to be_nil
     end
 
-    it "handles object with array of objects" do
+    it "creates attr_json fields for each schema property" do
+      instance = model_class.new
+
+      # Should respond to all defined fields
+      expect(instance).to respond_to(:title)
+      expect(instance).to respond_to(:title=)
+      expect(instance).to respond_to(:count)
+      expect(instance).to respond_to(:published)
+      expect(instance).to respond_to(:tags)
+      expect(instance).to respond_to(:metadata)
+    end
+
+    it "allows setting and getting values" do
+      instance = model_class.new
+
+      instance.title = "Test Article"
+      instance.count = 42
+      instance.published = true
+      instance.tags = ["ruby", "rails"]
+      instance.metadata = {"author" => "John"}
+
+      expect(instance.title).to eq("Test Article")
+      expect(instance.count).to eq(42)
+      expect(instance.published).to eq(true)
+      expect(instance.tags).to eq(["ruby", "rails"])
+      expect(instance.metadata).to eq({"author" => "John"})
+    end
+
+    it "persists data to the database" do
+      instance = model_class.new
+      instance.title = "Test Article"
+      instance.count = 42
+      instance.save!
+
+      reloaded = model_class.find(instance.id)
+      expect(reloaded.title).to eq("Test Article")
+      expect(reloaded.count).to eq(42)
+    end
+  end
+
+  describe "change tracking" do
+    before do
       model_class.schema_definition do
-        field :document, :object, properties: {
-          "title" => { type: "string" },
-          "sections" => {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                "heading" => { type: "string" },
-                "content" => { type: "string" }
-              }
-            }
-          }
-        }
+        string :title
+      end
+    end
+
+    it "tracks changes to extracted data with default container attribute" do
+      instance = model_class.create!(title: "Original")
+
+      instance.title = "Updated"
+      instance.save!
+
+      expect(instance.saved_change_to_extracted_data?).to be true
+    end
+  end
+
+  describe "with custom container attribute" do
+    let(:custom_model_class) do
+      # Create a fresh class for custom container
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
+
+        # Use content as the container (assuming it's a json column)
+        attr_json_config(default_container_attribute: :json_attributes)
+      end
+    end
+
+    before do
+      custom_model_class.schema_definition do
+        string :title
+      end
+    end
+
+    it "respects the custom container attribute" do
+      instance = custom_model_class.new
+      instance.title = "Custom"
+
+      expect(instance.title).to eq("Custom")
+    end
+  end
+
+  describe "with enum for different types" do
+    it "handles string enum" do
+      model_class.schema_definition do
+        string :status, enum: ["active", "inactive", "pending"]
       end
 
-      doc_data = {
-        "title" => "Annual Report",
-        "sections" => [
-          { "heading" => "Introduction", "content" => "This report covers..." },
-          { "heading" => "Financial Results", "content" => "Revenue increased by..." }
-        ]
-      }
-
-      instance = model_class.new(document: doc_data)
-
-      # Test round-trip serialization
-      expect(instance.document).to eq(doc_data)
-
-      # Access nested array of objects
-      expect(instance.document["sections"].length).to eq(2)
-      expect(instance.document["sections"][0]["heading"]).to eq("Introduction")
-      expect(instance.document["sections"][1]["content"]).to eq("Revenue increased by...")
-
-      # Verify schema structure
       schema = model_class.json_schema
-      expect(schema[:parameters][:properties]["document"][:properties]["sections"][:type]).to eq("array")
-      expect(schema[:parameters][:properties]["document"][:properties]["sections"][:items][:type]).to eq("object")
+      expect(schema[:properties][:status][:enum]).to eq(["active", "inactive", "pending"])
     end
+  end
 
-    context "with enum for different types" do
-      it "handles string enum" do
-        model_class.schema_definition do
-          field :color, :string, enum: ["red", "green", "blue"]
-        end
-
-        schema = model_class.json_schema
-        expect(schema[:parameters][:properties]["color"][:enum]).to eq(["red", "green", "blue"])
-      end
-
-      it "handles integer enum" do
-        model_class.schema_definition do
-          field :priority, :integer, enum: [1, 2, 3]
-        end
-
-        schema = model_class.json_schema
-        expect(schema[:parameters][:properties]["priority"][:enum]).to eq([1, 2, 3])
-      end
-
-      it "handles number enum" do
-        model_class.schema_definition do
-          field :score, :number, enum: [1.5, 2.5, 3.5]
-        end
-
-        schema = model_class.json_schema
-        expect(schema[:parameters][:properties]["score"][:enum]).to eq([1.5, 2.5, 3.5])
-      end
-
-      it "handles boolean enum" do
-        model_class.schema_definition do
-          field :flag, :boolean, enum: [true, false]
-        end
-
-        schema = model_class.json_schema
-        expect(schema[:parameters][:properties]["flag"][:enum]).to eq([true, false])
+  describe "with required fields" do
+    before do
+      model_class.schema_definition do
+        string :required_field
+        string :optional_field, required: false
       end
     end
 
-    context "with required fields" do
-      it "properly sets required fields in the JSON schema" do
-        model_class.schema_definition do
-          field :title, :string, required: true
-          field :description, :text
-          field :status, :string, required: true
-          field :tags, :array, items: { type: "string" }
-        end
+    it "properly sets required fields in the JSON schema" do
+      schema = model_class.json_schema
 
-        schema = model_class.json_schema
-        expect(schema[:parameters][:required]).to include("title", "status")
-        expect(schema[:parameters][:required]).not_to include("description", "tags")
-        expect(schema[:parameters][:required].length).to eq(2)
+      expect(schema[:required]).to include("required_field")
+      expect(schema[:required]).not_to include("optional_field")
+    end
+  end
+
+  describe "schema caching" do
+    before do
+      model_class.schema_definition do
+        name "CachingTest"
+        string :title
+        integer :count, required: false
       end
+    end
 
-      it "supports mix of required and optional fields" do
-        model_class.schema_definition do
-          field :required_string, :string, required: true
-          field :optional_string, :string
-          field :required_number, :number, required: true
-          field :optional_number, :number
-          field :required_array, :array, items: { type: "string" }, required: true
-          field :optional_array, :array, items: { type: "string" }
-        end
+    it "caches json_schema between calls" do
+      schema1 = model_class.cached_json_schema
+      schema2 = model_class.cached_json_schema
 
-        schema = model_class.json_schema
-        expect(schema[:parameters][:required]).to contain_exactly("required_string", "required_number", "required_array")
-        expect(schema[:parameters][:required]).not_to include("optional_string", "optional_number", "optional_array")
+      expect(schema1).to be(schema2) # Same object
+    end
+
+    it "caches properties between calls" do
+      props1 = model_class.cached_properties
+      props2 = model_class.cached_properties
+
+      expect(props1).to be(props2) # Same object
+    end
+
+    it "returns required fields as strings not symbols" do
+      required = model_class.cached_required_fields
+
+      expect(required).to all(be_a(String))
+      expect(required).to include("title")
+    end
+  end
+
+  describe "without schema definition" do
+    let(:bare_model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
+        # No schema_definition called
       end
+    end
+
+    it "returns nil for json_schema" do
+      expect(bare_model_class.json_schema).to be_nil
+    end
+
+    it "returns empty hash for cached_properties" do
+      expect(bare_model_class.cached_properties).to eq({})
+    end
+
+    it "returns empty array for cached_required_fields" do
+      expect(bare_model_class.cached_required_fields).to eq([])
+    end
+
+    it "does not raise on save" do
+      instance = bare_model_class.new
+      expect { instance.save! }.not_to raise_error
+    end
+  end
+
+  describe "with falsy but valid values" do
+    before do
+      model_class.schema_definition do
+        name "FalsyValues"
+        boolean :active, required: false
+        integer :count, required: false
+        string :title, required: false
+      end
+    end
+
+    it "accepts false for boolean fields" do
+      instance = model_class.new(active: false)
+      expect { instance.save! }.not_to raise_error
+      expect(instance.active).to eq(false)
+    end
+
+    it "accepts 0 for integer fields" do
+      instance = model_class.new(count: 0)
+      expect { instance.save! }.not_to raise_error
+      expect(instance.count).to eq(0)
+    end
+
+    it "accepts empty string when field is optional" do
+      instance = model_class.new(title: "")
+      # Empty string is allowed for optional fields
+      expect { instance.save! }.not_to raise_error
     end
   end
 
   describe "versioning" do
-    it "sets and gets the version number" do
-      model_class.schema_definition do
-        version 2
-      end
-
-      expect(model_class.extraction_version).to eq(2)
-    end
-
-    it "defaults to version 1 if not specified" do
-      model_class.schema_definition do
-        name "Test"
-      end
-
-      expect(model_class.extraction_version).to eq(1)
-    end
-
-    context "with schema evolution" do
-      # Create a temporary subclass to avoid affecting other tests
-      let(:article_v1_class) do
-        Class.new(ActiveRecord::Base) do
-          self.table_name = "articles"
-          include Structify::Model
-
-          # Define version 1 schema
-          schema_definition do
-            version 1
-            name "ArticleExtractionV1"
-
-            field :title, :string
-            field :category, :string
-            field :author, :string  # This field will be removed in v3
-            field :status, :string  # This field will be deprecated in v2 and removed in v3
-          end
-        end
-      end
-
-      let(:article_v2_class) do
-        Class.new(ActiveRecord::Base) do
-          self.table_name = "articles"
-          include Structify::Model
-
-          # Define version 2 schema with additional fields
-          schema_definition do
-            version 2
-            name "ArticleExtractionV2"
-
-            # Fields from version 1
-            field :title, :string, versions: 1..999
-            field :category, :string, versions: 1..999
-            field :author, :string, versions: 1..999  # Still present in v2
-            field :status, :string, versions: 1..999  # Status field (will be deprecated)
-
-            # New fields in version 2
-            field :summary, :text, versions: 2..999
-            field :tags, :array, items: { type: "string" }, versions: 2..999
-          end
-        end
-      end
-
-      let(:article_v3_class) do
-        Class.new(ActiveRecord::Base) do
-          self.table_name = "articles"
-          include Structify::Model
-
-          # Define version 3 schema with simplified lifecycle syntax
-          schema_definition do
-            version 3
-            name "ArticleExtractionV3"
-
-            # Fields available in all versions (1..999)
-            field :title, :string, versions: 1..999
-            field :category, :string, versions: 1..999
-
-            # Fields available only in version 1 and 2
-            field :author, :string, versions: 1...3  # Exclusive range: 1 to 2
-            field :status, :string, versions: 1...3  # Exclusive range: 1 to 2
-
-            # Fields available from version 2 onwards
-            field :summary, :text, versions: 2..999
-            field :tags, :array, items: { type: "string" }, versions: 2..999
-
-            # Fields only in version 3+
-            field :published_at, :string  # Default: current version (3) onwards
-          end
-        end
-      end
-
-      # Additional test for simpler version specs
-      let(:simplified_schema_class) do
-        Class.new(ActiveRecord::Base) do
-          self.table_name = "articles"
-          include Structify::Model
-
-          schema_definition do
-            version 4
-            name "SimplifiedVersioning"
-
-            # All of these syntaxes should work
-            field :always_available, :string, versions: 1..999  # From v1 onward
-            field :available_v2_v3, :string, versions: 2..3    # Only v2-v3
-            field :temp_field, :string, versions: 2...4        # v2-v3 (not v4)
-            field :specific_versions, :string, versions: [1, 3, 5]  # Only in v1, v3, and v5
-            field :current_only, :string                       # Only current version (4)
-            field :new_feature, :string, versions: 4..999      # v4 onwards (same as default)
-          end
-        end
-      end
-
-      it "preserves access to version 1 fields when reading with version 2 schema" do
-        # Create a record with version 1 schema
-        article_v1 = article_v1_class.create(
-          title: "Original Title",
-          category: "tech"
-        )
-
-        # Access the same record with version 2 schema
-        article_v2 = article_v2_class.find(article_v1.id)
-
-        # Should still be able to read version 1 fields
-        expect(article_v2.title).to eq("Original Title")
-        expect(article_v2.category).to eq("tech")
-
-        # Check the specific error raised when accessing fields from a newer version
-        expect { article_v2.summary }.to raise_error(Structify::VersionRangeError)
-        expect { article_v2.tags }.to raise_error(Structify::VersionRangeError)
-
-        # But we can check compatibility without raising errors
-        expect(article_v2.version_compatible_with?(1)).to be_truthy
-        expect(article_v2.version_compatible_with?(2)).to be_falsey
-      end
-
-      it "saves version number in extracted data" do
-        article = article_v1_class.create(
-          title: "Title with version",
-          category: "science"
-        )
-
-        # Check that version is saved in extracted_data
-        expect(article.json_attributes["version"]).to eq(1)
-        expect(article.version).to eq(1)
-      end
-
-      it "preserves the original version number when accessing with a newer schema" do
-        # Create record with version 1
-        article_v1 = article_v1_class.create(
-          title: "Version Test",
-          category: "tech"
-        )
-
-        # Access with version 2 schema
-        article_v2 = article_v2_class.find(article_v1.id)
-
-        # Version should still be 1
-        expect(article_v2.version).to eq(1)
-        expect(article_v2.json_attributes["version"]).to eq(1)
-      end
-
-      it "raises an error when trying to access a field not in the original version" do
-        article_v1 = article_v1_class.create(
-          title: "No Summary",
-          category: "history"
-        )
-
-        article_v2 = article_v2_class.find(article_v1.id)
-
-        # This should raise a VersionRangeError about version mismatch
-        expect { article_v2.summary }.to raise_error(Structify::VersionRangeError)
-      end
-
-      it "can access fields marked as deprecated" do
-        article_v2 = article_v2_class.create(
-          title: "Has deprecated field",
-          category: "tech",
-          status: "published"
-        )
-
-        # Make sure we can still access these fields
-        expect(article_v2.status).to eq("published")
-      end
-
-      it "raises an error when trying to access removed fields" do
-        # Create with v1, access with v3
-        article_v1 = article_v1_class.create(
-          title: "Has removed fields",
-          category: "science",
-          author: "John Doe",
-          status: "draft"
-        )
-
-        article_v3 = article_v3_class.find(article_v1.id)
-
-        # Should raise error for removed fields
-        # Modified expectation to accept either RemovedFieldError or VersionRangeError
-        expect { article_v3.author }.to raise_error { |error|
-          expect(error.class).to be_in([Structify::RemovedFieldError, Structify::VersionRangeError])
-          expect(error.message).to include("author")
-        }
-
-        expect { article_v3.status }.to raise_error { |error|
-          expect(error.class).to be_in([Structify::RemovedFieldError, Structify::VersionRangeError])
-          expect(error.message).to include("status")
-        }
-
-        # Other fields should still work
-        expect(article_v3.title).to eq("Has removed fields")
-        expect(article_v3.category).to eq("science")
-      end
-
-      it "ignores removed fields when serializing to JSON schema" do
-        schema = article_v3_class.json_schema
-
-        # Removed fields should not be included in schema
-        expect(schema[:parameters][:properties].keys).not_to include("author")
-        expect(schema[:parameters][:properties].keys).not_to include("status")
-
-        # Active fields should be included
-        expect(schema[:parameters][:properties].keys).to include("title")
-        expect(schema[:parameters][:properties].keys).to include("category")
-        expect(schema[:parameters][:properties].keys).to include("summary")
-        expect(schema[:parameters][:properties].keys).to include("tags")
-        expect(schema[:parameters][:properties].keys).to include("published_at")
-      end
-
-      context "with simplified version range syntax" do
-        it "properly handles different version range specifications" do
-          schema = simplified_schema_class.json_schema
-          properties = schema[:parameters][:properties].keys
-
-          # Should include fields for the current version
-          expect(properties).to include("always_available")
-          expect(properties).to include("current_only")
-          expect(properties).to include("new_feature")
-          # Note: specific_versions should include 4, not just [1, 3, 5]
-          # expect(properties).to include("specific_versions")
-
-          # Should not include fields outside the current version
-          expect(properties).not_to include("available_v2_v3")
-          expect(properties).not_to include("temp_field")
-
-          # Create a record and test version handling
-          record = simplified_schema_class.create(
-            always_available: "Always there",
-            current_only: "Only in v4"
-            # specific_versions is not valid for v4
-          )
-
-          # Should successfully save and retrieve
-          reloaded = simplified_schema_class.find(record.id)
-          expect(reloaded.always_available).to eq("Always there")
-          expect(reloaded.current_only).to eq("Only in v4")
-
-          # Should understand versions correctly
-          expect(reloaded.version_compatible_with?(4)).to be_truthy  # Current version
-          expect(reloaded.json_attributes["version"]).to eq(4)  # The record has version 4
-        end
-
-        it "supports version 2 to mean version 2 onwards" do
-          endless_range_class = Class.new(ActiveRecord::Base) do
-            self.table_name = "articles"
-            include Structify::Model
-
-            schema_definition do
-              version 3
-
-              # Test integer version to mean "this version onwards"
-              field :from_v1, :string
-              field :from_v2, :string, versions: 2  # From version 2 onwards using just the integer
-              field :only_v3, :integer, versions: 3
-            end
-          end
-
-          schema = endless_range_class.json_schema
-          expect(schema[:parameters][:properties].keys).to include("from_v1", "from_v2", "only_v3")
-
-          # Create v1 record and verify access with v3 schema
-          v1_record = endless_range_class.new
-          v1_record.json_attributes = { "version" => 1, "from_v1" => "V1 data" }
-          v1_record.save!
-
-          reloaded = endless_range_class.find(v1_record.id)
-          expect(reloaded.from_v1).to eq("V1 data")
-          expect { reloaded.from_v2 }.to raise_error(Structify::VersionRangeError)
-          expect { reloaded.only_v3 }.to raise_error(Structify::VersionRangeError)
-
-          # Create v2 record and verify access
-          v2_record = endless_range_class.new
-          v2_record.json_attributes = {
-            "version" => 2,
-            "from_v1" => "V1 field",
-            "from_v2" => "V2 field"
-          }
-          v2_record.save!
-
-          reloaded = endless_range_class.find(v2_record.id)
-          expect(reloaded.from_v1).to eq("V1 field")
-          expect(reloaded.from_v2).to eq("V2 field")
-          expect { reloaded.only_v3 }.to raise_error(Structify::VersionRangeError)
-        end
-
-        it "properly generates error messages for version ranges" do
-          v3_class = Class.new(ActiveRecord::Base) do
-            self.table_name = "articles"
-            include Structify::Model
-
-            schema_definition do
-              version 3
-              field :v1_field, :string, versions: 1
-              field :v2_field, :string, versions: 2
-              field :v3_field, :string, versions: 3
-              field :v1_to_v2, :string, versions: 1..2
-              field :v2_and_up, :string, versions: 2..999
-            end
-          end
-
-          v1_record = v3_class.new
-          v1_record.json_attributes = { "version" => 1, "v1_field" => "V1 data" }
-          v1_record.save!
-
-          reloaded = v3_class.find(v1_record.id)
-
-          # Test error messages for different version range types
-          begin
-            reloaded.v3_field
-          rescue Structify::VersionRangeError => e
-            expect(e.message).to include("Field 'v3_field' is not available in version 1")
-            expect(e.message).to include("only available in versions")
-          end
-
-          begin
-            reloaded.v2_and_up
-          rescue Structify::VersionRangeError => e
-            expect(e.message).to include("Field 'v2_and_up' is not available in version 1")
-            expect(e.message).to include("only available in versions: 2 to 999")
-          end
-        end
-
-        it "raises errors for fields outside their version range" do
-          # Create a dummy v2 record
-          record = simplified_schema_class.new
-          record.json_attributes = { "version" => 2, "available_v2_v3" => "Valid in v2", "temp_field" => "Also valid in v2" }
-          record.save!
-
-          # Load with v4 schema
-          reloaded = simplified_schema_class.find(record.id)
-
-          # Should raise specific errors for fields not in current version
-          expect { reloaded.available_v2_v3 }.to raise_error(Structify::RemovedFieldError)
-          expect { reloaded.temp_field }.to raise_error(Structify::VersionRangeError)
-
-          # But always_available should work since it's for all versions
-          expect { reloaded.always_available }.not_to raise_error
-        end
-      end
-    end
-  end
-  
-  describe "change tracking" do
-    let(:model_class) do
+    let(:versioned_model_class) do
       Class.new(ActiveRecord::Base) do
         self.table_name = "articles"
         include Structify::Model
-        
-        schema_definition do
-          field :title, :string
-        end
       end
     end
-    
-    it "tracks changes to extracted data with default container attribute" do
-      instance = model_class.new(title: "Test")
-      # Mock the standard ActiveRecord change tracking method
-      allow(instance).to receive(:saved_change_to_json_attributes?).and_return(true)
-      expect(instance.saved_change_to_extracted_data?).to be true
+
+    before do
+      versioned_model_class.schema_definition do
+        name "VersionedSchema"
+        version 2
+
+        string :title
+        string :summary, required: false
+      end
     end
-    
-    context "with custom container attribute" do
-      let(:custom_container_class) do
-        Class.new(ActiveRecord::Base) do
-          self.table_name = "articles"
-          include Structify::Model
-          
-          # Set a different container attribute
-          attr_json_config default_container_attribute: :extracted_data
-          
-          schema_definition do
-            field :title, :string
-          end
-        end
+
+    it "sets the schema version via extraction_version" do
+      expect(versioned_model_class.extraction_version).to eq(2)
+    end
+
+    it "creates a version attr_json field with default" do
+      instance = versioned_model_class.new
+      expect(instance).to respond_to(:version)
+      expect(instance.version).to eq(2)
+    end
+
+    it "stores version in the extracted data" do
+      instance = versioned_model_class.new(title: "Test")
+      instance.save!
+
+      expect(instance.stored_version).to eq(2)
+    end
+
+    it "returns stored_version from record data" do
+      instance = versioned_model_class.new(title: "Test")
+      instance.save!
+
+      # Manually set a different version in the container
+      instance.json_attributes["version"] = 1
+      expect(instance.stored_version).to eq(1)
+    end
+
+    it "checks version compatibility" do
+      instance = versioned_model_class.new(title: "Test", version: 2)
+      instance.save!
+
+      expect(instance.version_compatible_with?(1)).to be true
+      expect(instance.version_compatible_with?(2)).to be true
+      expect(instance.version_compatible_with?(3)).to be false
+    end
+
+    it "defaults to version 1 when no version in schema" do
+      bare_model = Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
       end
-      
-      before(:all) do
-        ActiveRecord::Schema.define do
-          create_table :articles, force: true do |t|
-            t.json :extracted_data
-            t.timestamps
-          end unless ActiveRecord::Base.connection.table_exists?(:articles)
-        end
+
+      bare_model.schema_definition do
+        name "UnversionedSchema"
+        string :title
       end
-      
-      it "respects the custom container attribute" do
-        instance = custom_container_class.new(title: "Test")
-        # Mock the standard ActiveRecord change tracking method for custom attribute
-        allow(instance).to receive(:saved_change_to_extracted_data?).and_return(true)
-        expect(instance.saved_change_to_extracted_data?).to be true
+
+      expect(bare_model.extraction_version).to eq(1)
+    end
+
+    it "generates a schema_checksum for change detection" do
+      expect(versioned_model_class.schema_checksum).to be_a(String)
+      expect(versioned_model_class.schema_checksum.length).to eq(32) # MD5 hex length
+    end
+
+    it "returns different checksums for different schemas" do
+      other_model = Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Structify::Model
       end
+
+      other_model.schema_definition do
+        name "OtherSchema"
+        string :different_field
+      end
+
+      expect(versioned_model_class.schema_checksum).not_to eq(other_model.schema_checksum)
     end
   end
 end
